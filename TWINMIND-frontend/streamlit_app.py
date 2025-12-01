@@ -10,14 +10,24 @@ st.set_page_config(
 
 BACKEND_URL = os.getenv("BACKEND_URL", "https://twinmind-assignment-4.onrender.com")
 
-def safe_request_json(res):
-    """Safely parse JSON without crashing."""
+
+# ==========================================================
+# SAFE JSON PARSER (prevents crash on HTML / 502 pages)
+# ==========================================================
+def safe_request(res):
+    if res is None:
+        return None, "No response"
+
     try:
-        return res.json()
+        data = res.json()
+        return data, None
     except Exception:
-        return None
+        return None, res.text[:1000]
 
 
+# ==========================================================
+# MAIN APP
+# ==========================================================
 def show_app():
     st.title("🧠 Second Brain AI Companion")
     st.header("Ingest Data")
@@ -31,15 +41,17 @@ def show_app():
     headers = {}
 
     # =====================================================
-    # DOCUMENT INGESTION  (SAFE)
+    # 📄 DOCUMENT INGESTION
     # =====================================================
     if modality == "Document":
         uploaded_file = st.file_uploader(
             "Upload Document (.pdf, .md, .txt)",
             type=["pdf", "md", "txt"]
         )
+
         if st.button("Ingest Document") and uploaded_file:
             files = {"file": uploaded_file}
+
             res = requests.post(
                 f"{BACKEND_URL}/api/ingest/upload",
                 files=files,
@@ -47,19 +59,25 @@ def show_app():
                 headers=headers
             )
 
-            data = safe_request_json(res)
+            data, err = safe_request(res)
             if data:
                 st.success(f"Document Ingested: {data.get('filename', '')}")
             else:
-                st.error(f"❌ Backend Error {res.status_code}: {res.text}")
+                st.error(f"❌ Backend Error {res.status_code}")
+                st.code(err)
 
     # =====================================================
-    # AUDIO INGESTION  (SAFE)
+    # 🎵 AUDIO INGESTION
     # =====================================================
     elif modality == "Audio":
-        uploaded_audio = st.file_uploader("Upload Audio (.mp3, .m4a)", type=["mp3", "m4a"])
+        uploaded_audio = st.file_uploader(
+            "Upload Audio (.mp3, .m4a)",
+            type=["mp3", "m4a"]
+        )
+
         if st.button("Ingest Audio") and uploaded_audio:
             files = {"file": uploaded_audio}
+
             res = requests.post(
                 f"{BACKEND_URL}/api/ingest/audio",
                 files=files,
@@ -67,19 +85,25 @@ def show_app():
                 headers=headers
             )
 
-            data = safe_request_json(res)
+            data, err = safe_request(res)
             if data:
                 st.success(f"Audio Ingested: {data.get('filename', '')}")
             else:
-                st.error(f"❌ Backend Error {res.status_code}: {res.text}")
+                st.error(f"❌ Backend Error {res.status_code}")
+                st.code(err)
 
     # =====================================================
-    # IMAGE INGESTION  (SAFE)
+    # 🖼️ IMAGE INGESTION
     # =====================================================
     elif modality == "Image":
-        uploaded_image = st.file_uploader("Upload Image", type=["png", "jpg", "jpeg"])
+        uploaded_image = st.file_uploader(
+            "Upload Image (.png, .jpg, .jpeg)",
+            type=["png", "jpg", "jpeg"]
+        )
+
         if st.button("Ingest Image") and uploaded_image:
             files = {"file": uploaded_image}
+
             res = requests.post(
                 f"{BACKEND_URL}/api/ingest/image",
                 files=files,
@@ -87,17 +111,19 @@ def show_app():
                 headers=headers
             )
 
-            data = safe_request_json(res)
+            data, err = safe_request(res)
             if data:
                 st.success(f"Image Ingested: {data.get('filename', '')}")
             else:
-                st.error(f"❌ Backend Error {res.status_code}: {res.text}")
+                st.error(f"❌ Backend Error {res.status_code}")
+                st.code(err)
 
     # =====================================================
-    # WEB SCRAPE INGESTION  (SAFE)
+    # 🌍 WEB URL INGESTION
     # =====================================================
     elif modality == "Web URL":
         url = st.text_input("Enter Web URL")
+
         if st.button("Ingest Web Content") and url:
             res = requests.post(
                 f"{BACKEND_URL}/api/ingest/web",
@@ -105,17 +131,19 @@ def show_app():
                 headers=headers
             )
 
-            data = safe_request_json(res)
+            data, err = safe_request(res)
             if data:
                 st.success(f"Web Content Ingested: {url}")
             else:
-                st.error(f"❌ Backend Error {res.status_code}: {res.text}")
+                st.error(f"❌ Backend Error {res.status_code}")
+                st.code(err)
 
     # =====================================================
-    # PLAIN TEXT INGESTION  (SAFE)
+    # ✏️ PLAIN TEXT INGESTION
     # =====================================================
     elif modality == "Plain Text":
         text = st.text_area("Enter Text")
+
         if st.button("Ingest Text") and text:
             res = requests.post(
                 f"{BACKEND_URL}/api/ingest/text",
@@ -123,14 +151,15 @@ def show_app():
                 headers=headers
             )
 
-            data = safe_request_json(res)
+            data, err = safe_request(res)
             if data:
-                st.success("Text Ingested")
+                st.success("Text Ingested Successfully")
             else:
-                st.error(f"❌ Backend Error {res.status_code}: {res.text}")
+                st.error(f"❌ Backend Error {res.status_code}")
+                st.code(err)
 
     # =====================================================
-    # CHAT (RAG)
+    # 💬 CHAT / RAG
     # =====================================================
     st.markdown("---")
     st.header("💬 Chat with Your Second Brain")
@@ -146,33 +175,37 @@ def show_app():
 
     if st.button("Send", key="send_btn") and query:
         with st.spinner("Thinking..."):
-            response = requests.post(
+            res = requests.post(
                 f"{BACKEND_URL}/api/rag",
                 json={"query": query, "user_id": user_id, "top_k": 5},
                 headers=headers
             )
 
-            data = safe_request_json(response)
+            data, err = safe_request(res)
             if not data:
-                st.error(f"❌ Backend Error {response.status_code}: {response.text}")
+                st.error(f"❌ Backend Error {res.status_code}")
+                st.code(err)
             else:
                 st.session_state.chat_history.append({
                     "user": query,
-                    "ai": data.get("answer", "No answer."),
+                    "ai": data.get("answer", "No answer found."),
                     "sources": data.get("sources", [])
                 })
 
-    # Show Chat History
+    # =====================================================
+    # CHAT HISTORY DISPLAY
+    # =====================================================
     for chat in reversed(st.session_state.chat_history):
         st.markdown(f"**You:** {chat['user']}")
         st.markdown(f"**AI:** {chat['ai']}")
+
         if chat["sources"]:
             with st.expander("Sources / Context"):
                 for idx, src in enumerate(chat["sources"], 1):
                     st.markdown(f"{idx}. {src}")
 
     st.markdown("---")
-    st.caption("Built for Second Brain AI Companion. Multi-modal ingestion + RAG + Gemini.")
+    st.caption("Built for Second Brain AI Companion — Multi-modal ingestion + RAG + Gemini.")
 
 
 show_app()
