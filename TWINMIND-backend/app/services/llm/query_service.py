@@ -1,35 +1,38 @@
 import logging
-logger = logging.getLogger(__name__)
-
-import google.generativeai as genai
 import os
+import google.generativeai as genai
 from dotenv import load_dotenv
 
 from app.services.embedding_service import EmbeddingService
 from app.services.faiss_service import FaissService
 
 load_dotenv()
+logger = logging.getLogger(__name__)
+
+# Configure Gemini API
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-# Global FAISS service (same used in RAG)
-faiss_service = FaissService(dim=384)
+# Use your updated FAISS (NO arguments!)
+faiss_service = FaissService()
 
 
 # ---------------------------
-#  GEMINI LLM
+#  GEMINI LLM SERVICE
 # ---------------------------
 class GeminiService:
     @staticmethod
     def generate_answer(query: str, context: str) -> str:
         """
-        Creates an LLM answer based on user query + recalled context.
+        Generate an LLM answer using Gemini 2.5 Pro.
+        Uses RAG context + user query.
         """
 
         prompt = (
-            "You are a helpful AI assistant. Use ONLY the provided context.\n\n"
+            "You are a helpful, factual AI assistant.\n"
+            "Answer ONLY using the provided context.\n\n"
             f"Context:\n{context}\n\n"
-            f"User Question: {query}\n\n"
-            "Answer clearly and concisely."
+            f"User Question:\n{query}\n\n"
+            "Give a clear, concise answer."
         )
 
         try:
@@ -37,51 +40,56 @@ class GeminiService:
             response = model.generate_content(prompt)
             return response.text
         except Exception as e:
-            logger.error(f"Gemini API error: {e}")
-            return "LLM error: Could not generate answer."
+            logger.error(f"Gemini error: {e}")
+            return "LLM error: unable to generate response."
 
 
 # ---------------------------
-#  SEMANTIC SEARCH FUNCTIONS
+#  SEMANTIC SEARCH
 # ---------------------------
 def semantic_search(query: str, top_k: int = 5):
     """
-    Uses FAISS + SentenceTransformer embeddings
-    to retrieve the most relevant chunks.
+    (1) Embed user query  
+    (2) Search FAISS index  
+    (3) Return top chunks  
     """
+
     try:
         query_embedding = EmbeddingService.get_embedding(query)
 
         if query_embedding is None:
             return []
 
-        results = faiss_service.search(query_embedding, top_k=top_k)
+        results = faiss_service.search(query_embedding, top_k)
 
-        # results = [(chunk_text, distance), ...]
+        # results = [(ChunkObject, distance)]
         return results
 
     except Exception as e:
-        logger.error(f"Semantic search error: {e}")
+        logger.error(f"Semantic search failed: {e}")
         return []
 
 
 # ---------------------------
-#  FULL PIPELINE (SEARCH + LLM)
+#  RAG PIPELINE
 # ---------------------------
 def generate_rag_answer(query: str, top_k: int = 5):
     """
-    (1) Get relevant chunks  
-    (2) Build context  
-    (3) Ask Gemini for an answer  
+    FULL PIPELINE:
+    1) Semantic Search → retrieves relevant chunks  
+    2) Build context from chunks  
+    3) Ask Gemini to generate a factual answer  
     """
-    relevant = semantic_search(query, top_k=top_k)
 
-    if not relevant:
+    retrieved = semantic_search(query, top_k)
+
+    if not retrieved:
         return "No relevant information found.", []
 
-    # Build context string
-    context = "\n".join([chunk_text for chunk_text, distance in relevant])
+    # Create RAG context from chunk content
+    context = "\n".join([chunk.content for chunk, dist in retrieved])
 
+    # Generate Gemini answer
     answer = GeminiService.generate_answer(query, context)
 
-    return answer, relevant
+    return answer, retrieved
