@@ -9,9 +9,13 @@ from datetime import datetime
 from app.database.connection import get_db
 from app.models.chunk import Chunk
 from app.models.document import Document
-from app.services.embedding_service import EmbeddingService
-from app.services.faiss_service import FaissService
-from app.services.llm.gemini_service import GeminiService
+from app.services.llm.query_service import (
+    GeminiService,
+    faiss_service,
+    semantic_search,
+    generate_rag_answer
+)
+
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
