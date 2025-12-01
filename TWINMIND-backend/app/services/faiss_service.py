@@ -2,45 +2,45 @@ import faiss
 import numpy as np
 
 class FaissService:
-    def __init__(self, dim=384):
+    def __init__(self, dim=1536):  # MUST MATCH embedding size
+        self.dim = dim
         self.index = faiss.IndexFlatL2(dim)
+        self.chunks = []   # store entire chunk object
         self.embeddings = []
-        self.chunks = []
-
-    def add_chunk(self, chunk_content, embedding):
-        self.embeddings.append(embedding)
-        self.chunks.append(chunk_content)
-        self.index.add(np.array([embedding], dtype=np.float32))
 
     def build_index(self, all_chunks):
-        if not all_chunks:
-            self.embeddings = []
-            self.chunks = []
-            self.index = None
+        """Rebuild the FAISS index from database chunk objects"""
+        self.chunks = [c for c in all_chunks if c.embedding is not None]
+        self.embeddings = [c.embedding for c in self.chunks]
+
+        if not self.embeddings:
+            # empty index
+            self.index = faiss.IndexFlatL2(self.dim)
             return
-        self.embeddings = [chunk.embedding for chunk in all_chunks if chunk.embedding is not None]
-        self.chunks = [chunk.content for chunk in all_chunks if chunk.embedding is not None]
-        if self.embeddings:
-            import faiss
-            self.index = faiss.IndexFlatL2(len(self.embeddings[0]))
-            self.index.add(np.array(self.embeddings, dtype=np.float32))
-        else:
-            self.index = None
+
+        # recreate index with correct dimension
+        self.index = faiss.IndexFlatL2(self.dim)
+        embeddings_np = np.array(self.embeddings, dtype=np.float32)
+        self.index.add(embeddings_np)
 
     def search(self, query_embedding, top_k=5):
-        # query_embedding should be a list/array of floats
-        if not self.embeddings or self.index is None or query_embedding is None:
+        """Return list of (ChunkObject, distance)"""
+        if not self.embeddings:
             return []
-        import numpy as np
-        D, I = self.index.search(np.array([query_embedding], dtype=np.float32), top_k)
+
+        if query_embedding is None:
+            return []
+
+        query_np = np.array([query_embedding], dtype=np.float32)
+
+        distances, indices = self.index.search(query_np, top_k)
         results = []
-        for idx, dist in zip(I[0], D[0]):
+
+        for idx, dist in zip(indices[0], distances[0]):
             if idx == -1:
                 continue
-            chunk = self.chunks[idx]
-            # If chunk is a string, use it directly
-            if isinstance(chunk, str):
-                results.append((chunk, dist))
-            else:
-                results.append((chunk.content, dist))
+
+            chunk_obj = self.chunks[idx]
+            results.append((chunk_obj, dist))
+
         return results
