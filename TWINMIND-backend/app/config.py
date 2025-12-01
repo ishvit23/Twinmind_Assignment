@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     API_VERSION: str = "1.0.0"
     
     # Database
-    DATABASE_URL: str = "postgresql://postgres:password@localhost:5432/twinmind_db"
+    DATABASE_URL: str = "postgresql://twinmind_db_user:x6zydrD2iC9J6J20vKrBwgqetlCVtJzU@dpg-d4mp0j2li9vc73f1a8t0-a/twinmind_db"
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = "password"
     POSTGRES_DB: str = "twinmind_db"
