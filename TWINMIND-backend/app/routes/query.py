@@ -10,18 +10,11 @@ from app.database.connection import get_db
 from app.models.chunk import Chunk
 from app.models.document import Document
 
-# Correct imports from your structure
-from app.services.llm.query_service import (
-    GeminiService,
-    faiss_service,
-    semantic_search,
-    generate_rag_answer
-)
-
-from app.services.llm.embedding_service import EmbeddingService
+# Your actual file structure → embedding_service is NOT inside llm
+from app.services.embedding_service import EmbeddingService
+from app.services.llm.query_service import GeminiService, faiss_service
 
 logger = logging.getLogger(__name__)
-
 router = APIRouter(prefix="/api")
 
 
@@ -34,7 +27,7 @@ class QueryRequest(BaseModel):
 
 
 # ------------------------------------------------------------
-# 🔎 KEYWORD SEARCH
+# 🔎 SIMPLE KEYWORD SEARCH
 # ------------------------------------------------------------
 @router.post("/query")
 async def keyword_query(request: QueryRequest, db: Session = Depends(get_db)):
@@ -47,6 +40,7 @@ async def keyword_query(request: QueryRequest, db: Session = Depends(get_db)):
             )
 
         chunks = q.all()
+
         if not chunks:
             return {
                 "status": "success",
@@ -56,6 +50,7 @@ async def keyword_query(request: QueryRequest, db: Session = Depends(get_db)):
             }
 
         query_lower = request.query.lower()
+
         matched = [
             c for c in chunks
             if query_lower in (c.content or "").lower()
@@ -77,7 +72,7 @@ async def keyword_query(request: QueryRequest, db: Session = Depends(get_db)):
         }
 
     except Exception as e:
-        logger.error("Keyword query failed", exc_info=True)
+        logger.error("Keyword query error", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -106,16 +101,15 @@ async def rag(req: QueryRequest, db: Session = Depends(get_db)):
         # Build FAISS index
         faiss_service.build_index(chunks)
 
-        # Get embedding
+        # Embed user query
         query_emb = EmbeddingService.get_embedding(req.query)
         results = faiss_service.search(query_emb, req.top_k)
 
         if not results:
-            return {"answer": "No relevant info found.", "sources": []}
+            return {"answer": "No relevant information found.", "sources": []}
 
         context = "\n\n".join([c.content for c, _ in results])
 
-        # LLM Answer
         answer = GeminiService.answer(req.query, context)
 
         return {
@@ -129,7 +123,7 @@ async def rag(req: QueryRequest, db: Session = Depends(get_db)):
 
 
 # ------------------------------------------------------------
-# 🧠 SEMANTIC SEARCH (No LLM)
+# 🧠 SEMANTIC SEARCH
 # ------------------------------------------------------------
 @router.post("/semantic-search")
 async def semantic_search_route(request: QueryRequest, db: Session = Depends(get_db)):
@@ -141,10 +135,14 @@ async def semantic_search_route(request: QueryRequest, db: Session = Depends(get
 
         if request.start_date:
             q = q.filter(Chunk.created_at >= request.start_date)
+
         if request.end_date:
             q = q.filter(Chunk.created_at <= request.end_date)
 
         chunks = q.all()
+
+        if not chunks:
+            return {"status": "success", "results": []}
 
         faiss_service.build_index(chunks)
 
@@ -158,14 +156,10 @@ async def semantic_search_route(request: QueryRequest, db: Session = Depends(get
             "status": "success",
             "query": request.query,
             "results": [
-                {
-                    "content": getattr(c, "content", ""),
-                    "distance": d
-                }
-                for c, d in results
+                {"content": c.content, "distance": d} for c, d in results
             ]
         }
 
     except Exception as e:
-        logger.error("Semantic search failed", exc_info=True)
+        logger.error("Semantic search error", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
