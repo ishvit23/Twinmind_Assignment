@@ -37,3 +37,4 @@ class Chunk(Base):
 
     document = relationship("Document", back_populates="chunks")
     chunks = relationship("Chunk", back_populates="document", cascade="all, delete-orphan")
+
