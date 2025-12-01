@@ -20,16 +20,10 @@ class ModalityType(enum.Enum):
 class Document(Base):
     __tablename__ = "documents"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)  # FIXED
-    title = Column(String)
-    modality = Column(Enum(ModalityType))
-    file_path = Column(String, nullable=True)
-    source_url = Column(String, nullable=True)
-    doc_metadata = Column(String, nullable=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title = Column(String, nullable=False)
+    modality = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    doc_metadata = Column(String)
 
-    chunks = relationship(
-        "Chunk",
-        back_populates="document",
-        cascade="all, delete-orphan"
-    )
+    chunks = relationship("Chunk", back_populates="document", cascade="all, delete")
