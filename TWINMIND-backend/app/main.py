@@ -7,7 +7,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from app.config import get_settings
-from app.database.connection import init_db, engine, Base
+from app.database.connection import init_db, engine
+from app.models.base import Base
+
 
 # IMPORTANT — load models BEFORE create_all()
 import app.models.document
