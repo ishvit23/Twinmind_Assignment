@@ -1,7 +1,11 @@
 import streamlit as st
 import requests
+import os
 
 st.set_page_config(page_title="Second Brain AI Companion", layout="wide", initial_sidebar_state="collapsed")
+
+# Use public backend URL
+BACKEND_URL = os.getenv("BACKEND_URL", "https://twinmind-assignment-4.onrender.com")
 
 if "page" not in st.session_state:
     st.session_state.page = "login"
@@ -16,7 +20,7 @@ def show_login():
     password = st.text_input("Password", type="password")
     if st.button("Login"):
         res = requests.post(
-            "http://localhost:8000/api/auth/login",
+            f"{BACKEND_URL}/api/auth/login",
             json={"username": username, "password": password}
         )
         if res.status_code == 200 and "access_token" in res.json():
@@ -31,13 +35,13 @@ def show_login():
 
 def show_register():
     st.title("Register")
-    st.info("Please register to continue.")  # <-- Message only at the top
+    st.info("Please register to continue.")
     username = st.text_input("Username")
     email = st.text_input("Email")
     password = st.text_input("Password", type="password")
     if st.button("Register"):
         res = requests.post(
-            "http://localhost:8000/api/auth/register",
+            f"{BACKEND_URL}/api/auth/register",
             json={"username": username, "password": password, "email": email}
         )
         if res.status_code == 200:
@@ -65,7 +69,7 @@ def show_app():
         if st.button("Ingest Document") and uploaded_file:
             files = {"file": uploaded_file}
             res = requests.post(
-                "http://localhost:8000/api/ingest/document",
+                f"{BACKEND_URL}/api/ingest/document",
                 files=files,
                 params={"user_id": user_id},
                 headers=headers
@@ -77,7 +81,7 @@ def show_app():
         if st.button("Ingest Audio") and uploaded_audio:
             files = {"file": uploaded_audio}
             res = requests.post(
-                "http://localhost:8000/api/ingest/audio",
+                f"{BACKEND_URL}/api/ingest/audio",
                 files=files,
                 params={"user_id": user_id},
                 headers=headers
@@ -89,7 +93,7 @@ def show_app():
         if st.button("Ingest Image") and uploaded_image:
             files = {"file": uploaded_image}
             res = requests.post(
-                "http://localhost:8000/api/ingest/image",
+                f"{BACKEND_URL}/api/ingest/image",
                 files=files,
                 params={"user_id": user_id},
                 headers=headers
@@ -100,7 +104,7 @@ def show_app():
         url = st.text_input("Enter Web URL")
         if st.button("Ingest Web Content") and url:
             res = requests.post(
-                "http://localhost:8000/api/ingest/web",
+                f"{BACKEND_URL}/api/ingest/web",
                 json={"url": url, "user_id": user_id},
                 headers=headers
             )
@@ -110,7 +114,7 @@ def show_app():
         text = st.text_area("Enter Text")
         if st.button("Ingest Text") and text:
             res = requests.post(
-                "http://localhost:8000/api/ingest/text",
+                f"{BACKEND_URL}/api/ingest/text",
                 json={"text": text, "user_id": user_id},
                 headers=headers
             )
@@ -125,13 +129,13 @@ def show_app():
     query = st.text_input(
         "Ask your AI companion:",
         key="chat_input",
-        placeholder="(eg .. Tell me about Ishvit Khajuria.)"  # <-- Added placeholder
+        placeholder="Tell me about Ishvit Khajuria."
     )
 
     if st.button("Send", key="send_btn") and query:
         with st.spinner("Thinking..."):
             response = requests.post(
-                "http://localhost:8000/api/rag",
+                f"{BACKEND_URL}/api/rag",
                 json={"query": query, "user_id": user_id, "top_k": 5},
                 headers=headers
             )
