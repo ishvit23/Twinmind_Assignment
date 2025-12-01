@@ -1,5 +1,6 @@
 from sqlalchemy import Column, String, DateTime, Enum
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 import uuid
 import enum
@@ -19,7 +20,7 @@ class ModalityType(enum.Enum):
 class Document(Base):
     __tablename__ = "documents"
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     title = Column(String)
     modality = Column(Enum(ModalityType))
     file_path = Column(String, nullable=True)
