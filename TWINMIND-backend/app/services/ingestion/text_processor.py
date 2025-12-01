@@ -1,56 +1,48 @@
-from app.models.document import Document, ModalityType
-from app.models.chunk import Chunk
-from app.database.connection import SessionLocal
-from app.utils.chunking import chunk_text
-from app.services.embedding_service import EmbeddingService
+from sqlalchemy.orm import Session
 from datetime import datetime
 import uuid
 
+from app.models.document import Document, ModalityType
+from app.models.chunk import Chunk
+from app.services.embedding_service import EmbeddingService
+
 class TextProcessor:
-    def __init__(self):
-        self.embedding_service = EmbeddingService()
-    
-    async def process(self, text: str, title: str, user_id: str):
-        """Process plain text input"""
-        db = SessionLocal()
-        try:
-            # Create document record
-            doc_id = str(uuid.uuid4())
-            document = Document(
-                id=doc_id,
-                title=title,
-                modality=ModalityType.TEXT,
-                created_at=datetime.utcnow(),
-                doc_metadata=f"uploaded_by:{user_id}"
+    async def process(self, text: str, title: str, user_id: str, db: Session):
+        # Create the document
+        doc = Document(
+            title=title,
+            modality=ModalityType.TEXT,
+            file_path=None,
+            doc_metadata=f"uploaded_by:{user_id}",
+            created_at=datetime.utcnow()
+        )
+        db.add(doc)
+        db.commit()
+        db.refresh(doc)
+
+        # Chunk logic
+        chunks = []
+        chunk_size = 1000
+        overlap = 200
+
+        for i in range(0, len(text), chunk_size - overlap):
+            piece = text[i:i + chunk_size].strip()
+            if not piece:
+                continue
+
+            emb = EmbeddingService.get_embedding(piece)
+
+            chunk = Chunk(
+                document_id=doc.id,
+                chunk_index=len(chunks),
+                content=piece,
+                tokens=len(piece.split()),
+                embedding=emb
             )
-            db.add(document)
-            db.flush()  # Make sure document.id is generated
-            
-            # Create chunks from text
-            chunks = chunk_text(text)
+            chunks.append(chunk)
 
-            # Insert chunks with embeddings
-            chunk_count = 0
-            for idx, chunk_text_content in enumerate(chunks):
-                embedding = EmbeddingService.get_embedding(chunk_text_content)
-
-                chunk = Chunk(
-                    document_id=document.id,
-                    chunk_index=idx,
-                    content=chunk_text_content,
-                    tokens=len(chunk_text_content.split()),
-                    embedding=embedding
-                )
-                db.add(chunk)
-                chunk_count += 1
-            
+        if chunks:
+            db.add_all(chunks)
             db.commit()
 
-            return {
-                "document_id": doc_id,
-                "chunk_count": chunk_count,
-                "title": title
-            }
-        
-        finally:
-            db.close()
+        return doc, chunks
