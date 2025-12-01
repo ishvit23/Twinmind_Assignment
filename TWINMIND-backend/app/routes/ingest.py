@@ -208,17 +208,22 @@ class TextUpload(BaseModel):
 
 
 @router.post("/ingest/text")
-async def upload_text(req: TextUpload, db: Session = Depends(get_db)):
+async def upload_text(
+    text: str = Body(...),
+    title: str = Body("Untitled"),
+    user_id: str = Body("default_user"),
+    db: Session = Depends(get_db)
+):
     try:
-        doc, chunks = await TextProcessor().process(req.text, req.title, req.user_id, db)
-
+        processor = TextProcessor()
+        document, chunks = await processor.process(text, title, user_id, db)
         return {
             "status": "success",
-            "document_id": doc.id,
+            "message": "Text uploaded and processed",
+            "document_id": str(document.id),
             "chunks_created": len(chunks),
-            "title": req.title
+            "title": document.title
         }
-
     except Exception as e:
-        logger.error("Text upload failed", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Text upload failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Text upload failed: {e}")
