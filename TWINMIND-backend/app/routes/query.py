@@ -1,27 +1,29 @@
 # app/routes/query.py
 import logging
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from datetime import datetime
-from typing import Optional
 from pydantic import BaseModel
+from typing import Optional
+from datetime import datetime
 
 from app.database.connection import get_db
-from app.services.embedding_service import EmbeddingService
-from app.services.faiss_service import FaissService
-from app.services.llm.query_service import GeminiService, faiss_service
 from app.models.chunk import Chunk
 from app.models.document import Document
+from app.services.embedding_service import EmbeddingService
+from app.services.faiss_service import FaissService
+from app.services.llm.gemini_service import GeminiService
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(prefix="/api")
+
+faiss_service = FaissService()
 
 class QueryRequest(BaseModel):
     query: str
     user_id: str = "default_user"
     top_k: int = 5
-    start_date: Optional[datetime] = None
-    end_date: Optional[datetime] = None
+    start_date: Optional[datetime]
+    end_date: Optional[datetime]
 
 @router.post("/query")
 async def keyword_query(request: QueryRequest, db: Session = Depends(get_db)):
@@ -55,50 +57,33 @@ async def keyword_query(request: QueryRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/rag")
-async def rag(request: QueryRequest, db: Session = Depends(get_db)):
-    try:
-        q = db.query(Chunk)
+async def rag(req: QueryRequest, db: Session = Depends(get_db)):
+    chunks_query = db.query(Chunk).join(Document).filter(
+        Document.doc_metadata.contains(f"uploaded_by:{req.user_id}")
+    )
 
-        if request.user_id:
-            q = q.join(Document).filter(Document.doc_metadata.contains(f"uploaded_by:{request.user_id}"))
+    if req.start_date:
+        chunks_query = chunks_query.filter(Chunk.created_at >= req.start_date)
+    if req.end_date:
+        chunks_query = chunks_query.filter(Chunk.created_at <= req.end_date)
 
-        # date filters
-        if request.start_date:
-            q = q.filter(Chunk.created_at >= request.start_date)
-        if request.end_date:
-            q = q.filter(Chunk.created_at <= request.end_date)
+    chunks = chunks_query.all()
+    faiss_service.build_index(chunks)
 
-        chunks = q.all()
-        logger.info(f"Loaded {len(chunks)} chunks for user {request.user_id}")
+    query_emb = EmbeddingService.get_embedding(req.query)
+    results = faiss_service.search(query_emb, req.top_k)
 
-        if not chunks:
-            return {"status": "success", "answer": "No data found for this user.", "sources": []}
+    if not results:
+        return {"answer": "No relevant info found.", "sources": []}
 
-        # Build FAISS index from DB chunks
-        faiss_service.build_index(chunks)
+    context = "\n\n".join([c.content for c, _ in results])
 
-        # Get query embedding
-        query_emb = EmbeddingService.get_embedding(request.query)
-        if query_emb is None:
-            return {"status": "success", "answer": "Could not create embedding for query.", "sources": []}
+    answer = GeminiService.answer(req.query, context)
 
-        results = faiss_service.search(query_emb, request.top_k)
-        if not results:
-            return {"status": "success", "answer": "No relevant results.", "sources": []}
-
-        # Build context string from chunk contents
-        context = "\n\n".join([getattr(chunk_obj, "content", "") for chunk_obj, _ in results])
-
-        # Generate answer using Gemini
-        answer = GeminiService.generate_answer(request.query, context)
-
-        sources = [chunk_obj.content for chunk_obj, _ in results]
-
-        return {"status": "success", "answer": answer, "sources": sources}
-    except Exception as e:
-        logger.error("RAG error", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
+    return {
+        "answer": answer,
+        "sources": [c.content[:200] for c, _ in results]
+    }
 @router.post("/semantic-search")
 async def semantic_search(request: QueryRequest, db: Session = Depends(get_db)):
     try:
