@@ -16,12 +16,15 @@ def show_app():
     user_id = "demo_user"
     headers = {}
 
+    # --------------------------
+    # DOCUMENT INGESTION FIXED 🚀
+    # --------------------------
     if modality == "Document":
         uploaded_file = st.file_uploader("Upload Document (.pdf, .md, .txt)", type=["pdf", "md", "txt"])
         if st.button("Ingest Document") and uploaded_file:
             files = {"file": uploaded_file}
             res = requests.post(
-                f"{BACKEND_URL}/api/ingest/document",
+                f"{BACKEND_URL}/api/ingest/upload",   # <-- FIXED
                 files=files,
                 params={"user_id": user_id},
                 headers=headers
@@ -62,12 +65,15 @@ def show_app():
             )
             st.success(f"Web Content Ingested: {url}")
 
+    # --------------------------
+    # FIXED PLAIN TEXT JSON BODY
+    # --------------------------
     elif modality == "Plain Text":
         text = st.text_area("Enter Text")
         if st.button("Ingest Text") and text:
             res = requests.post(
                 f"{BACKEND_URL}/api/ingest/text",
-                json={"text": text, "user_id": user_id},
+                json={"text": text, "title": "Manual Text", "user_id": user_id},  # <-- FIXED
                 headers=headers
             )
             st.success("Text Ingested")
