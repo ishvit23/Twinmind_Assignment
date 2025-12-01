@@ -1,11 +1,13 @@
 from fastapi import UploadFile
 from sqlalchemy.orm import Session
-from app.models.document import Document, Chunk, ModalityType
 from datetime import datetime
 import uuid
 import os
 from PIL import Image
 import pytesseract
+
+from app.models.document import Document, ModalityType
+from app.models.chunk import Chunk
 from app.services.embedding_service import EmbeddingService
 
 # Ensure uploads folder exists
@@ -22,10 +24,10 @@ class ImageProcessor:
         try:
             img = Image.open(image_path)
             ocr_text = pytesseract.image_to_string(img)
-        except Exception as e:
+        except Exception:
             ocr_text = ""
         
-        # Create and commit document object
+        # Create Document
         doc = Document(
             title=file.filename,
             modality=ModalityType.IMAGE,
@@ -35,31 +37,35 @@ class ImageProcessor:
         )
         db.add(doc)
         db.commit()
-        db.refresh(doc)  # Ensure doc.id is available
+        db.refresh(doc)
 
-        # Create chunk objects if OCR text exists
+        # Chunk creation
         chunks = []
         if ocr_text.strip():
             chunk_size = 1000
-            chunk_overlap = 200
+            overlap = 200
             text = ocr_text.replace('\x00', '').replace('\r', '\n')
-            for i in range(0, len(text), chunk_size - chunk_overlap):
-                chunk_text_content = text[i:i + chunk_size].strip()
-                if chunk_text_content and len(chunk_text_content) > 10:
-                    embedding = EmbeddingService.get_embedding(chunk_text_content)
+
+            for i in range(0, len(text), chunk_size - overlap):
+                chunk_text = text[i:i + chunk_size].strip()
+                if chunk_text and len(chunk_text) > 10:
+                    embedding = EmbeddingService.get_embedding(chunk_text)
+
                     chunk = Chunk(
                         document_id=doc.id,
                         chunk_index=len(chunks),
-                        content=chunk_text_content,
-                        tokens=len(chunk_text_content.split()),
+                        content=chunk_text,
+                        tokens=len(chunk_text.split()),
                         embedding=embedding
                     )
                     chunks.append(chunk)
+
         if chunks:
             db.add_all(chunks)
             db.commit()
 
         return doc, chunks
+
 
 async def process_image(file: UploadFile, user_id: str, db: Session):
     image_path = f"uploads/{uuid.uuid4()}_{file.filename}"
@@ -70,10 +76,10 @@ async def process_image(file: UploadFile, user_id: str, db: Session):
     try:
         img = Image.open(image_path)
         ocr_text = pytesseract.image_to_string(img)
-    except Exception as e:
+    except Exception:
         ocr_text = ""
     
-    # Create document object
+    # Document
     doc = Document(
         title=file.filename,
         modality=ModalityType.IMAGE,
@@ -82,21 +88,23 @@ async def process_image(file: UploadFile, user_id: str, db: Session):
         created_at=datetime.utcnow()
     )
 
-    # Create chunk objects if OCR text exists
+    # Chunk generation (if OCR text exists)
     chunks = []
     if ocr_text.strip():
         chunk_size = 1000
-        chunk_overlap = 200
+        overlap = 200
         text = ocr_text.replace('\x00', '').replace('\r', '\n')
-        for i in range(0, len(text), chunk_size - chunk_overlap):
-            chunk_text_content = text[i:i + chunk_size].strip()
-            if chunk_text_content and len(chunk_text_content) > 10:
-                embedding = EmbeddingService.get_embedding(chunk_text_content)
+
+        for i in range(0, len(text), chunk_size - overlap):
+            chunk_text = text[i:i + chunk_size].strip()
+            if chunk_text and len(chunk_text) > 10:
+                embedding = EmbeddingService.get_embedding(chunk_text)
+
                 chunk = Chunk(
                     document_id=doc.id,
                     chunk_index=len(chunks),
-                    content=chunk_text_content,
-                    tokens=len(chunk_text_content.split()),
+                    content=chunk_text,
+                    tokens=len(chunk_text.split()),
                     embedding=embedding
                 )
                 chunks.append(chunk)
