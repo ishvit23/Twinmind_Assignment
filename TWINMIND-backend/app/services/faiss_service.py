@@ -1,11 +1,11 @@
+# app/services/faiss_service.py
 import faiss
 import numpy as np
 from app.services.embedding_service import EmbeddingService
 
-
 class FaissService:
     def __init__(self):
-        # auto-detect correct dimension (384 for MiniLM)
+        # auto-detect correct dimension from embedding service
         self.dim = EmbeddingService.get_dim()
         self.index = faiss.IndexFlatL2(self.dim)
         self.chunks = []       # store chunk objects
@@ -15,16 +15,15 @@ class FaissService:
         """
         Build FAISS index from Chunk SQLAlchemy objects
         """
+        # keep only chunks with embeddings
         self.chunks = [c for c in all_chunks if c.embedding is not None]
         self.embeddings = [c.embedding for c in self.chunks]
 
+        # (re)create index
+        self.index = faiss.IndexFlatL2(self.dim)
         if not self.embeddings:
-            # rebuild empty index
-            self.index = faiss.IndexFlatL2(self.dim)
             return
 
-        # Recreate FAISS index using correct dimension
-        self.index = faiss.IndexFlatL2(self.dim)
         embeddings_np = np.array(self.embeddings, dtype=np.float32)
         self.index.add(embeddings_np)
 
@@ -42,6 +41,5 @@ class FaissService:
         for idx, dist in zip(indices[0], distances[0]):
             if idx == -1:
                 continue
-            results.append((self.chunks[idx], dist))
-
+            results.append((self.chunks[idx], float(dist)))
         return results
