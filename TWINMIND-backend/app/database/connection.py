@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
-import os
+from sqlalchemy.orm import sessionmaker
+from app.models.base import Base   # ✅ Use the ONE TRUE Base
 from app.config import get_settings
 
 settings = get_settings()
@@ -11,8 +11,6 @@ engine = create_engine(settings.DATABASE_URL, echo=False)
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-Base = declarative_base()
-
 def get_db():
     db = SessionLocal()
     try:
@@ -21,4 +19,5 @@ def get_db():
         db.close()
 
 def init_db():
+    # Only use Base imported from models/base.py
     Base.metadata.create_all(bind=engine)
