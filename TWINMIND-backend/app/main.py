@@ -11,14 +11,13 @@ from app.database.connection import init_db, engine, Base
 
 # IMPORTANT: import models BEFORE create_all
 import app.models.document
-import app.models.chunking     # FIXED: correct model file
+import app.models.chunk      # FIXED: correct model file
 import app.models.user
 
 from app.routes.ingest import router as ingest_router
 from app.routes.query import router as query_router
 from app.routes.websocket import router as ws_router
 from app.routes.auth import router as auth_router
-
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -33,14 +32,14 @@ settings = get_settings()
 async def lifespan(app: FastAPI):
     logger.info("🚀 TwinMind Backend Starting...")
 
-    # TABLE CREATION
+    # CREATE TABLES
     try:
         Base.metadata.create_all(bind=engine)
         logger.info("✅ Database tables created")
     except Exception as e:
         logger.error(f"❌ Failed table creation: {e}")
 
-    # INITIALIZE DB
+    # INIT DB CONNECTION
     try:
         init_db()
         logger.info("✅ DB initialized")
@@ -51,6 +50,9 @@ async def lifespan(app: FastAPI):
     logger.info("🛑 TwinMind Backend Shutdown")
 
 
+# -------------------------------------------------------
+# FASTAPI APP
+# -------------------------------------------------------
 app = FastAPI(
     title="TwinMind API",
     description="AI-powered knowledge management system",
@@ -89,7 +91,7 @@ async def health_check():
 
 
 # -------------------------------------------------------
-# ROOT
+# ROOT ENDPOINT
 # -------------------------------------------------------
 @app.get("/")
 async def root():
@@ -107,7 +109,7 @@ async def root():
 
 
 # -------------------------------------------------------
-# DEBUG / LOCAL RUN
+# LOCAL RUN
 # -------------------------------------------------------
 if __name__ == "__main__":
     import uvicorn
