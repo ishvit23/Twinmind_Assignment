@@ -26,3 +26,5 @@ scikit-learn==1.5.0
 
 passlib[bcrypt]==1.7.4
 pypdf==4.2.0
+
+openai-whisper==1.1.10
