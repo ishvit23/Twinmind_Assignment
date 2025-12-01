@@ -1,23 +1,21 @@
 import logging
-from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
+from app.config import get_settings
+import numpy as np
 
 logger = logging.getLogger(__name__)
-load_dotenv()
+settings = get_settings()
 
 class EmbeddingService:
-    # MiniLM-L6-v2 → embeddings are 384-dimensional
-    model = SentenceTransformer("all-MiniLM-L6-v2")
+    model = SentenceTransformer(settings.EMBEDDING_MODEL)
 
     @staticmethod
-    def get_embedding(text: str) -> list[float]:
-        """Generate embedding from text."""
-        if not text or not isinstance(text, str):
+    def get_dim():
+        return settings.EMBEDDING_DIMENSION
+
+    @staticmethod
+    def get_embedding(text: str):
+        if not text:
             return None
-        embedding = EmbeddingService.model.encode(text)
-        return embedding.tolist()
-
-    @staticmethod
-    def get_dim() -> int:
-        """Return embedding vector dimension."""
-        return EmbeddingService.model.get_sentence_embedding_dimension()
+        emb = EmbeddingService.model.encode(text)
+        return np.array(emb, dtype="float32").tolist()
