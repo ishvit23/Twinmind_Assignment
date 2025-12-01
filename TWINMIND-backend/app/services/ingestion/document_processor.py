@@ -1,13 +1,14 @@
 from fastapi import UploadFile
 import logging
 import os
-from app.models.document import Document, Chunk, ModalityType
 from sqlalchemy.orm import Session
 import uuid
 import pypdf
-from app.services.embedding_service import EmbeddingService
-from app.models.document import Chunk
 from datetime import datetime
+
+from app.models.document import Document, ModalityType
+from app.models.chunk import Chunk
+from app.services.embedding_service import EmbeddingService
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +43,9 @@ class DocumentProcessor:
             )
             db.add(doc)
             db.commit()
-            db.refresh(doc)  # Ensure doc.id is available
-            
-            # Create chunks using the helper method
+            db.refresh(doc)
+
+            # Create chunks
             chunks = self._create_chunks(text, doc.id, self.chunk_size)
             db.add_all(chunks)
             db.commit()
@@ -52,13 +53,13 @@ class DocumentProcessor:
             logger.info(f"Document processed: {doc.id} with {len(chunks)} chunks")
             
             return doc, chunks
+
         except Exception as e:
             db.rollback()
             logger.error(f"Error processing file: {str(e)}", exc_info=True)
             raise
     
     async def _extract_text(self, filename: str, content: bytes) -> str:
-        """Extract text from various file types"""
         ext = os.path.splitext(filename)[1].lower()
         
         try:
@@ -73,7 +74,6 @@ class DocumentProcessor:
             return ""
     
     def _extract_pdf_text(self, content: bytes) -> str:
-        """Extract text from PDF"""
         try:
             import io
             pdf_file = io.BytesIO(content)
@@ -81,7 +81,8 @@ class DocumentProcessor:
             
             text = ""
             for page in pdf_reader.pages:
-                text += page.extract_text() + "\n"
+                page_text = page.extract_text() or ""
+                text += page_text + "\n"
             
             return text
         except Exception as e:
@@ -89,7 +90,6 @@ class DocumentProcessor:
             return ""
     
     def _get_modality(self, filename: str) -> ModalityType:
-        """Determine file modality from extension"""
         ext = os.path.splitext(filename)[1].lower()
         
         if ext == '.pdf':
@@ -104,21 +104,23 @@ class DocumentProcessor:
             return ModalityType.TEXT
     
     def _create_chunks(self, text: str, document_id: str, chunk_size: int = 1000) -> list:
-        """Split text into chunks"""
         chunks = []
-        chunk_overlap = 200
+        overlap = 200
         text = text.replace('\x00', '').replace('\r', '\n')
-        for i in range(0, len(text), chunk_size - chunk_overlap):
+
+        for i in range(0, len(text), chunk_size - overlap):
             chunk_text = text[i:i + chunk_size].strip()
             if chunk_text and len(chunk_text) > 10:
-                chunk_text_content = chunk_text
-                embedding = EmbeddingService.get_embedding(chunk_text_content)
+
+                embedding = EmbeddingService.get_embedding(chunk_text)
+
                 chunk = Chunk(
                     document_id=document_id,
                     chunk_index=len(chunks),
-                    content=chunk_text_content,
-                    tokens=len(chunk_text_content.split()),
+                    content=chunk_text,
+                    tokens=len(chunk_text.split()),
                     embedding=embedding
                 )
                 chunks.append(chunk)
+
         return chunks
