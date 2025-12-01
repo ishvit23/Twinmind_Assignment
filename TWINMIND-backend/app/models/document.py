@@ -5,7 +5,7 @@ from datetime import datetime
 import uuid
 import enum
 
-from app.models.base import Base  # correct import
+from app.models.base import Base
 
 
 class ModalityType(enum.Enum):
@@ -20,7 +20,7 @@ class ModalityType(enum.Enum):
 class Document(Base):
     __tablename__ = "documents"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)  # FIXED
     title = Column(String)
     modality = Column(Enum(ModalityType))
     file_path = Column(String, nullable=True)
@@ -28,5 +28,8 @@ class Document(Base):
     doc_metadata = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    # Correct relationship (Chunk defined in chunk.py)
-    chunks = relationship("Chunk", back_populates="document", cascade="all, delete-orphan")
+    chunks = relationship(
+        "Chunk",
+        back_populates="document",
+        cascade="all, delete-orphan"
+    )
