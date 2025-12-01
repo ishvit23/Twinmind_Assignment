@@ -11,7 +11,7 @@ from app.database.connection import init_db, engine, Base
 
 # IMPORTANT: import models BEFORE create_all
 import app.models.document
-import app.models.chunk
+import app.models.chunking     # FIXED: correct model file
 import app.models.user
 
 from app.routes.ingest import router as ingest_router
