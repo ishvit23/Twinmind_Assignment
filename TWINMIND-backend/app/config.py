@@ -18,9 +18,9 @@ class Settings(BaseSettings):
     # Redis / Celery
     REDIS_URL: str = ""
 
-    # Embeddings
-    EMBEDDING_MODEL: str = "text-embedding-3-small"
-    EMBEDDING_DIMENSION: int = 1536
+    # Embeddings (MATCH MiniLM)
+    EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
+    EMBEDDING_DIMENSION: int = 384
 
     # Chunking
     CHUNK_SIZE: int = 1000
