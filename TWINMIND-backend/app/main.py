@@ -9,6 +9,11 @@ load_dotenv()
 from app.config import get_settings
 from app.database.connection import init_db, engine, Base
 
+# IMPORTANT: import models BEFORE create_all
+import app.models.document
+import app.models.chunk
+import app.models.user
+
 from app.routes.ingest import router as ingest_router
 from app.routes.query import router as query_router
 from app.routes.websocket import router as ws_router
@@ -17,37 +22,35 @@ from app.routes.auth import router as auth_router
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
 settings = get_settings()
 
 
 # -------------------------------------------------------
-# LIFESPAN (startup + shutdown)
+# LIFESPAN
 # -------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("🚀 TwinMind Backend Starting...")
 
-    # Create tables on startup (important for Render)
+    # TABLE CREATION
     try:
         Base.metadata.create_all(bind=engine)
-        logger.info("✅ Database tables ready")
+        logger.info("✅ Database tables created")
     except Exception as e:
-        logger.error(f"❌ Table creation failed: {e}")
+        logger.error(f"❌ Failed table creation: {e}")
 
-    # Init DB connection
+    # INITIALIZE DB
     try:
         init_db()
-        logger.info("✅ Database initialized")
+        logger.info("✅ DB initialized")
     except Exception as e:
-        logger.error(f"❌ Database init failed: {e}")
+        logger.error(f"❌ DB init failed: {e}")
 
     yield
-    logger.info("🛑 TwinMind Backend Shutting down...")
+    logger.info("🛑 TwinMind Backend Shutdown")
 
 
-# -------------------------------------------------------
-# FASTAPI APP
-# -------------------------------------------------------
 app = FastAPI(
     title="TwinMind API",
     description="AI-powered knowledge management system",
@@ -71,7 +74,7 @@ app.add_middleware(
 # -------------------------------------------------------
 # ROUTERS
 # -------------------------------------------------------
-app.include_router(auth_router, prefix="/api", tags=["Authentication"])
+app.include_router(auth_router, prefix="/api", tags=["Auth"])
 app.include_router(ingest_router, prefix="/api", tags=["Ingestion"])
 app.include_router(query_router, prefix="/api", tags=["Query"])
 app.include_router(ws_router, tags=["WebSocket"])
@@ -82,15 +85,11 @@ app.include_router(ws_router, tags=["WebSocket"])
 # -------------------------------------------------------
 @app.get("/health")
 async def health_check():
-    return {
-        "status": "healthy",
-        "version": "1.0.0",
-        "service": "TwinMind Backend"
-    }
+    return {"status": "healthy", "version": "1.0.0"}
 
 
 # -------------------------------------------------------
-# ROOT ENDPOINT
+# ROOT
 # -------------------------------------------------------
 @app.get("/")
 async def root():
@@ -98,22 +97,17 @@ async def root():
         "message": "Welcome to TwinMind API",
         "docs": "/docs",
         "endpoints": {
-            "auth": "/api/auth/register, /api/auth/login",
-            "ingest": "/api/ingest/upload",
-            "query": "/api/query, /api/rag",
-            "websocket": "/ws/query"
+            "auth": "/api/auth",
+            "ingest": "/api/ingest",
+            "query": "/api/query",
+            "rag": "/api/rag",
+            "websocket": "/ws/query",
         }
     }
 
 
 # -------------------------------------------------------
-# REMOVE DUPLICATE RAG ENDPOINT
-# (Query router already provides /api/rag)
-# -------------------------------------------------------
-
-
-# -------------------------------------------------------
-# LOCAL DEVELOPMENT ENTRYPOINT
+# DEBUG / LOCAL RUN
 # -------------------------------------------------------
 if __name__ == "__main__":
     import uvicorn
