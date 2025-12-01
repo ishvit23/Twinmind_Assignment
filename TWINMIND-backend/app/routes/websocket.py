@@ -1,11 +1,13 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import logging
 import json
+
 from app.database.connection import SessionLocal
-from app.models.document import Chunk
+from app.models.chunk import Chunk   # FIXED IMPORT
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
 
 class ConnectionManager:
     def __init__(self):
@@ -16,7 +18,8 @@ class ConnectionManager:
         self.active_connections.append(websocket)
 
     def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
 
     async def broadcast(self, message: str):
         for connection in self.active_connections:
@@ -25,47 +28,68 @@ class ConnectionManager:
             except Exception as e:
                 logger.error(f"Broadcast error: {e}")
 
+
 manager = ConnectionManager()
+
 
 @router.websocket("/ws/query")
 async def websocket_query(websocket: WebSocket):
     await manager.connect(websocket)
+
     try:
         while True:
-            data = await websocket.receive_text()
-            query_data = json.loads(data)
-            query = query_data.get("query", "")
-            
-            logger.info(f"WebSocket query: {query}")
-            
-            # Simulate streaming response
+            raw_data = await websocket.receive_text()
+
+            try:
+                query_data = json.loads(raw_data)
+            except Exception:
+                await websocket.send_json({"type": "error", "message": "Invalid JSON"})
+                continue
+
+            query = query_data.get("query", "").strip()
+            logger.info(f"WebSocket query received: '{query}'")
+
+            if not query:
+                await websocket.send_json({"type": "error", "message": "Empty query"})
+                continue
+
+            # Query DB
             db = SessionLocal()
-            chunks = db.query(Chunk).all()
-            db.close()
-            
-            # Search matching chunks
+            try:
+                chunks = db.query(Chunk).limit(200).all()  # safeguard
+            finally:
+                db.close()
+
             query_lower = query.lower()
-            matched = [c for c in chunks if query_lower in c.content.lower()][:5]
-            
-            # Stream results
+            matched = [
+                c for c in chunks
+                if query_lower in c.content.lower()
+            ][:5]
+
+            # Stream matched chunks
             for i, chunk in enumerate(matched):
-                response = {
+                await websocket.send_json({
                     "type": "result",
                     "index": i + 1,
-                    "content": chunk.content[:200],
-                    "document_id": chunk.document_id
-                }
-                await websocket.send_json(response)
-            
-            # Send completion
+                    "chunk_id": str(chunk.id),
+                    "document_id": str(chunk.document_id),
+                    "preview": chunk.content[:200]
+                })
+
+            # Completion message
             await websocket.send_json({
                 "type": "complete",
                 "total_results": len(matched)
             })
-            
+
     except WebSocketDisconnect:
         manager.disconnect(websocket)
-        logger.info("Client disconnected")
+        logger.info("WebSocket client disconnected")
+
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
-        await websocket.close(code=1000)
+        logger.error(f"WebSocket error: {e}", exc_info=True)
+        try:
+            await websocket.send_json({"type": "error", "message": str(e)})
+        except:
+            pass
+        await websocket.close(code=1011)
