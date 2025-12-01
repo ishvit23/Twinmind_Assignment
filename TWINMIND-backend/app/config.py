@@ -19,8 +19,9 @@ class Settings(BaseSettings):
     REDIS_URL: str = ""
 
     # Embeddings (MATCH MiniLM)
+    # Embeddings
     EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
-    EMBEDDING_DIMENSION: int = 384
+    EMBEDDING_DIMENSION: int = 384   # FIXED
 
     # Chunking
     CHUNK_SIZE: int = 1000
