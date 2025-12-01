@@ -5,7 +5,12 @@ from pgvector.sqlalchemy import Vector
 from datetime import datetime
 import uuid
 
-from app.models.base import Base   # FIXED IMPORT
+from app.models.base import Base
+from app.services.embedding_service import EmbeddingService  # NEW IMPORT
+
+
+# Auto-detect embedding dimension from SentenceTransformer model
+EMBEDDING_DIM = EmbeddingService.model.get_sentence_embedding_dimension()
 
 
 class Chunk(Base):
@@ -18,7 +23,9 @@ class Chunk(Base):
     content = Column(String, nullable=False)
     tokens = Column(Integer)
 
-    embedding = Column(Vector(1536))  # or your EMBEDDING_DIMENSION
+    # FIXED: use correct dimension instead of 1536
+    embedding = Column(Vector(EMBEDDING_DIM))  
+
     created_at = Column(DateTime, default=datetime.utcnow)
 
     document = relationship("Document", back_populates="chunks")
