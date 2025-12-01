@@ -1,44 +1,35 @@
-# app/services/faiss_service.py
 import faiss
 import numpy as np
-from app.services.embedding_service import EmbeddingService
+from app.config import get_settings
+
+settings = get_settings()
 
 class FaissService:
-    def __init__(self):
-        # auto-detect correct dimension from embedding service
-        self.dim = EmbeddingService.get_dim()
+    def __init__(self, dim=None):
+        self.dim = dim or settings.EMBEDDING_DIMENSION
         self.index = faiss.IndexFlatL2(self.dim)
-        self.chunks = []       # store chunk objects
-        self.embeddings = []   # store embeddings
+        self.chunks = []
+        self.embeddings = []
 
     def build_index(self, all_chunks):
-        """
-        Build FAISS index from Chunk SQLAlchemy objects
-        """
-        # keep only chunks with embeddings
-        self.chunks = [c for c in all_chunks if c.embedding is not None]
+        self.chunks = [c for c in all_chunks if c.embedding]
         self.embeddings = [c.embedding for c in self.chunks]
 
-        # (re)create index
         self.index = faiss.IndexFlatL2(self.dim)
-        if not self.embeddings:
-            return
 
-        embeddings_np = np.array(self.embeddings, dtype=np.float32)
-        self.index.add(embeddings_np)
+        if self.embeddings:
+            arr = np.array(self.embeddings, dtype=np.float32)
+            if arr.ndim == 1:
+                arr = arr.reshape(1, -1)
+            self.index.add(arr)
 
-    def search(self, query_embedding, top_k=5):
-        """
-        Returns list of (ChunkObject, distance)
-        """
-        if not self.embeddings or query_embedding is None:
+    def search(self, query_emb, top_k=5):
+        if not query_emb or not self.embeddings:
             return []
-
-        query_np = np.array([query_embedding], dtype=np.float32)
-        distances, indices = self.index.search(query_np, top_k)
-
+        q = np.array([query_emb], dtype=np.float32)
+        D, I = self.index.search(q, top_k)
         results = []
-        for idx, dist in zip(indices[0], distances[0]):
+        for idx, dist in zip(I[0], D[0]):
             if idx == -1:
                 continue
             results.append((self.chunks[idx], float(dist)))
