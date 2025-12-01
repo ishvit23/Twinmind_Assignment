@@ -1,4 +1,5 @@
-from app.models.document import Document, Chunk, ModalityType
+from app.models.document import Document, ModalityType
+from app.models.chunk import Chunk
 from app.database.connection import SessionLocal
 from app.utils.chunking import chunk_text
 from app.services.embedding_service import EmbeddingService
@@ -23,16 +24,16 @@ class TextProcessor:
                 doc_metadata=f"uploaded_by:{user_id}"
             )
             db.add(document)
-            db.flush()  # Ensure doc.id is available
+            db.flush()  # Make sure document.id is generated
             
-            # Chunk text
+            # Create chunks from text
             chunks = chunk_text(text)
-            
-            # Create chunk records with embeddings
+
+            # Insert chunks with embeddings
             chunk_count = 0
             for idx, chunk_text_content in enumerate(chunks):
                 embedding = EmbeddingService.get_embedding(chunk_text_content)
-                
+
                 chunk = Chunk(
                     document_id=document.id,
                     chunk_index=idx,
@@ -44,7 +45,7 @@ class TextProcessor:
                 chunk_count += 1
             
             db.commit()
-            
+
             return {
                 "document_id": doc_id,
                 "chunk_count": chunk_count,
