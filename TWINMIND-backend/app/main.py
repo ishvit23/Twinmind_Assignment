@@ -7,13 +7,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from app.config import get_settings
-from app.database.connection import init_db, engine
-from app.database.base import Base
+from app.database.connection import init_db, engine, Base
 
 from app.routes.ingest import router as ingest_router
 from app.routes.query import router as query_router
 from app.routes.websocket import router as ws_router
 from app.routes.auth import router as auth_router
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
