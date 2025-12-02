@@ -1,4 +1,4 @@
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))# app/services/ingestion/audio_processor.py
+# app/services/ingestion/audio_processor.py
 
 import uuid
 import os
