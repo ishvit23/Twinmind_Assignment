@@ -11,16 +11,16 @@ from app.database.connection import get_db
 from app.models.chunk import Chunk
 from app.models.document import Document
 
-# Correct imports
 from app.services.embedding_service import EmbeddingService
 from app.services.faiss_service import FaissService
 from app.services.llm.query_service import GeminiService
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api", tags=["Query"])
+# ❌ REMOVE prefix="/api"
+router = APIRouter(tags=["Query"])
 
-# Single global FAISS index for the project
+# Global FAISS index
 faiss_service = FaissService()
 
 
@@ -43,7 +43,6 @@ async def keyword_query(request: QueryRequest, db: Session = Depends(get_db)):
     try:
         q = db.query(Chunk)
 
-        # Filter by user metadata
         if request.user_id:
             q = q.join(Document).filter(
                 Document.doc_metadata.contains(f"uploaded_by:{request.user_id}")
@@ -91,7 +90,6 @@ async def keyword_query(request: QueryRequest, db: Session = Depends(get_db)):
 @router.post("/rag")
 async def rag(req: QueryRequest, db: Session = Depends(get_db)):
     try:
-        # Query chunks for that user
         chunks_q = (
             db.query(Chunk)
             .join(Document)
@@ -108,20 +106,16 @@ async def rag(req: QueryRequest, db: Session = Depends(get_db)):
         if not chunks:
             return {"answer": "No relevant data found.", "sources": []}
 
-        # Build FAISS index
         faiss_service.build_index(chunks)
 
-        # Embed user query
         query_emb = EmbeddingService.get_embedding(req.query)
         results = faiss_service.search(query_emb, req.top_k)
 
         if not results:
             return {"answer": "No relevant information found.", "sources": []}
 
-        # Build context string
         context = "\n\n".join([c.content for c, _ in results])
 
-        # LLM Call
         answer = GeminiService.answer(req.query, context)
 
         return {
@@ -150,7 +144,6 @@ async def semantic_search_route(request: QueryRequest, db: Session = Depends(get
     try:
         q = db.query(Chunk)
 
-        # Filters
         if request.user_id:
             q = q.join(Document).filter(
                 Document.doc_metadata.contains(f"uploaded_by:{request.user_id}")
