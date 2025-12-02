@@ -10,12 +10,16 @@ from app.database.connection import get_db
 from app.models.chunk import Chunk
 from app.models.document import Document
 
-# Your actual file structure → embedding_service is NOT inside llm
+# Correct imports
 from app.services.embedding_service import EmbeddingService
-from app.services.llm.query_service import GeminiService, faiss_service
+from app.services.faiss_service import FaissService
+from app.services.llm.query_service import GeminiService
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api")
+router = APIRouter(prefix="/api", tags=["Query"])
+
+# Create global FAISS instance
+faiss_service = FaissService()
 
 
 class QueryRequest(BaseModel):
@@ -44,7 +48,6 @@ async def keyword_query(request: QueryRequest, db: Session = Depends(get_db)):
         if not chunks:
             return {
                 "status": "success",
-                "query": request.query,
                 "results": [],
                 "message": "No documents found"
             }
@@ -131,7 +134,9 @@ async def semantic_search_route(request: QueryRequest, db: Session = Depends(get
         q = db.query(Chunk)
 
         if request.user_id:
-            q = q.join(Document).filter(Document.doc_metadata.contains(f"uploaded_by:{request.user_id}"))
+            q = q.join(Document).filter(
+                Document.doc_metadata.contains(f"uploaded_by:{request.user_id}")
+            )
 
         if request.start_date:
             q = q.filter(Chunk.created_at >= request.start_date)
