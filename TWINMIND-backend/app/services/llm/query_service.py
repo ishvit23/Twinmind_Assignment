@@ -11,7 +11,7 @@ from app.services.faiss_service import FaissService
 load_dotenv()
 
 # Gemini API key is automatically picked from environment
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 logger = logging.getLogger(__name__)
 
