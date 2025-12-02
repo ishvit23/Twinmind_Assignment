@@ -1,6 +1,7 @@
 # app/services/llm/query_service.py
 
 import logging
+import os
 from dotenv import load_dotenv
 import google.generativeai as genai
 
@@ -10,7 +11,7 @@ from app.services.faiss_service import FaissService
 load_dotenv()
 
 # Gemini API key is automatically picked from environment
-genai.configure(api_key=None)
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 logger = logging.getLogger(__name__)
 
