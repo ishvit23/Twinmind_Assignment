@@ -6,7 +6,8 @@ from sqlalchemy import Column, String, DateTime, Enum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
-from app.database.connection import Base
+# IMPORTANT: Base must come ONLY from models.base
+from app.models.base import Base
 
 
 # -------------------------
@@ -33,10 +34,10 @@ class Document(Base):
 
     modality = Column(Enum(ModalityType), nullable=False)
 
-    # FIXED — processors require this
+    # Required by processors
     file_path = Column(String, nullable=True)
 
-    # uploader, source URL, etc.
+    # uploader / metadata
     doc_metadata = Column(String, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
