@@ -12,16 +12,21 @@ class FaissService:
         self.embeddings = []
 
     def build_index(self, all_chunks):
-        self.chunks = [c for c in all_chunks if c.embedding]
-        self.embeddings = [c.embedding for c in self.chunks]
+    # Filter only chunks that actually have embeddings
+    self.chunks = [
+        c for c in all_chunks
+        if c.embedding is not None and len(c.embedding) > 0
+    ]
 
-        self.index = faiss.IndexFlatL2(self.dim)
+    if not self.chunks:
+        self.index = None
+        return
 
-        if self.embeddings:
-            arr = np.array(self.embeddings, dtype=np.float32)
-            if arr.ndim == 1:
-                arr = arr.reshape(1, -1)
-            self.index.add(arr)
+    embeddings = np.array([c.embedding for c in self.chunks], dtype="float32")
+
+    self.index = faiss.IndexFlatL2(self.dimension)
+    self.index.add(embeddings)
+
 
     def search(self, query_emb, top_k=5):
         if not query_emb or not self.embeddings:
