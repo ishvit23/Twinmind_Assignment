@@ -1,4 +1,5 @@
 # app/routes/query.py
+
 import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -16,12 +17,16 @@ from app.services.faiss_service import FaissService
 from app.services.llm.query_service import GeminiService
 
 logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api", tags=["Query"])
 
-# Create global FAISS instance
+# Single global FAISS index for the project
 faiss_service = FaissService()
 
 
+# ---------------------------
+# Request Model
+# ---------------------------
 class QueryRequest(BaseModel):
     query: str
     user_id: str = "default_user"
@@ -38,6 +43,7 @@ async def keyword_query(request: QueryRequest, db: Session = Depends(get_db)):
     try:
         q = db.query(Chunk)
 
+        # Filter by user metadata
         if request.user_id:
             q = q.join(Document).filter(
                 Document.doc_metadata.contains(f"uploaded_by:{request.user_id}")
@@ -65,17 +71,17 @@ async def keyword_query(request: QueryRequest, db: Session = Depends(get_db)):
             "results_count": len(matched),
             "results": [
                 {
-                    "document_id": c.document_id,
+                    "document_id": str(c.document_id),
                     "chunk_id": str(c.id),
                     "content": c.content[:300] + ("..." if len(c.content) > 300 else ""),
-                    "relevance_score": 1.0
+                    "relevance_score": 1.0,
                 }
                 for c in matched
-            ]
+            ],
         }
 
     except Exception as e:
-        logger.error("Keyword query error", exc_info=True)
+        logger.error("Keyword query failed", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -85,18 +91,19 @@ async def keyword_query(request: QueryRequest, db: Session = Depends(get_db)):
 @router.post("/rag")
 async def rag(req: QueryRequest, db: Session = Depends(get_db)):
     try:
-        chunks_query = (
+        # Query chunks for that user
+        chunks_q = (
             db.query(Chunk)
             .join(Document)
             .filter(Document.doc_metadata.contains(f"uploaded_by:{req.user_id}"))
         )
 
         if req.start_date:
-            chunks_query = chunks_query.filter(Chunk.created_at >= req.start_date)
+            chunks_q = chunks_q.filter(Chunk.created_at >= req.start_date)
         if req.end_date:
-            chunks_query = chunks_query.filter(Chunk.created_at <= req.end_date)
+            chunks_q = chunks_q.filter(Chunk.created_at <= req.end_date)
 
-        chunks = chunks_query.all()
+        chunks = chunks_q.all()
 
         if not chunks:
             return {"answer": "No relevant data found.", "sources": []}
@@ -111,13 +118,23 @@ async def rag(req: QueryRequest, db: Session = Depends(get_db)):
         if not results:
             return {"answer": "No relevant information found.", "sources": []}
 
+        # Build context string
         context = "\n\n".join([c.content for c, _ in results])
 
+        # LLM Call
         answer = GeminiService.answer(req.query, context)
 
         return {
             "answer": answer,
-            "sources": [c.content[:200] for c, _ in results]
+            "sources": [
+                {
+                    "content": c.content[:500],
+                    "distance": float(d),
+                    "chunk_id": str(c.id),
+                    "document_id": str(c.document_id)
+                }
+                for c, d in results
+            ]
         }
 
     except Exception as e:
@@ -133,6 +150,7 @@ async def semantic_search_route(request: QueryRequest, db: Session = Depends(get
     try:
         q = db.query(Chunk)
 
+        # Filters
         if request.user_id:
             q = q.join(Document).filter(
                 Document.doc_metadata.contains(f"uploaded_by:{request.user_id}")
@@ -140,7 +158,6 @@ async def semantic_search_route(request: QueryRequest, db: Session = Depends(get
 
         if request.start_date:
             q = q.filter(Chunk.created_at >= request.start_date)
-
         if request.end_date:
             q = q.filter(Chunk.created_at <= request.end_date)
 
@@ -152,7 +169,8 @@ async def semantic_search_route(request: QueryRequest, db: Session = Depends(get
         faiss_service.build_index(chunks)
 
         query_emb = EmbeddingService.get_embedding(request.query)
-        if query_emb is None:
+
+        if not query_emb:
             return {"status": "success", "results": []}
 
         results = faiss_service.search(query_emb, request.top_k)
@@ -161,10 +179,16 @@ async def semantic_search_route(request: QueryRequest, db: Session = Depends(get
             "status": "success",
             "query": request.query,
             "results": [
-                {"content": c.content, "distance": d} for c, d in results
+                {
+                    "content": c.content,
+                    "distance": float(d),
+                    "chunk_id": str(c.id),
+                    "document_id": str(c.document_id)
+                }
+                for c, d in results
             ]
         }
 
     except Exception as e:
-        logger.error("Semantic search error", exc_info=True)
+        logger.error("Semantic search failed", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
