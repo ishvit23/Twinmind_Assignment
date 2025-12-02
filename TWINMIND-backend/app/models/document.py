@@ -18,7 +18,7 @@ class ModalityType(enum.Enum):
     PDF = "pdf"
     IMAGE = "image"
     AUDIO = "audio"
-    WEB = "web"
+    WEB = "web"          # used for URL ingestion
     MARKDOWN = "markdown"
     OTHER = "other"
 
@@ -34,10 +34,10 @@ class Document(Base):
 
     modality = Column(Enum(ModalityType), nullable=False)
 
-    # Required by processors
+    # file_path is optional (web/text do not use it)
     file_path = Column(String, nullable=True)
 
-    # uploader / metadata
+    # uploader metadata, source URL, tags, etc.
     doc_metadata = Column(String, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
