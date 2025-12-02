@@ -1,16 +1,17 @@
-# app/services/ingestion/audio_processor.py
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))# app/services/ingestion/audio_processor.py
 
 import uuid
 import os
 from datetime import datetime
 from sqlalchemy.orm import Session
-
-from openai import OpenAI
-client = OpenAI()
+import whisper
 
 from app.models.document import Document, ModalityType
 from app.models.chunk import Chunk
 from app.services.embedding_service import EmbeddingService
+
+# Load Whisper model ONCE (safe for Render)
+whisper_model = whisper.load_model("base")
 
 
 class AudioProcessor:
@@ -18,25 +19,18 @@ class AudioProcessor:
     async def process(self, file, user_id: str, db: Session):
 
         # --------------------------------------
-        # SAVE FILE
+        # SAVE AUDIO FILE
         # --------------------------------------
-        os.makedirs("uploads", exist_ok=True)
         audio_path = f"uploads/{uuid.uuid4()}_{file.filename}"
-
         with open(audio_path, "wb") as f:
             f.write(await file.read())
 
         # --------------------------------------
-        # TRANSCRIBE USING WHISPER API
+        # TRANSCRIBE (Local Whisper)
         # --------------------------------------
         try:
-            with open(audio_path, "rb") as audio_file:
-                result = client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=audio_file
-                )
-            transcript = (result.text or "").strip()
-
+            result = whisper_model.transcribe(audio_path)
+            transcript = result.get("text", "").strip()
         except Exception:
             transcript = ""
 
@@ -57,21 +51,20 @@ class AudioProcessor:
         db.flush()
 
         # --------------------------------------
-        # CREATE CHUNKS WITH EMBEDDINGS
+        # CREATE CHUNKS + EMBEDDINGS
         # --------------------------------------
         chunks = []
         chunk_size = 700
         overlap = 150
 
         for i in range(0, len(transcript), chunk_size - overlap):
-
             piece = transcript[i:i + chunk_size].strip()
             if len(piece) < 10:
                 continue
 
-            emb = EmbeddingService.get_embedding(piece)
+            embedding = EmbeddingService.get_embedding(piece)
 
-            if not emb:
+            if embedding is None or len(embedding) != EmbeddingService.get_dim():
                 continue
 
             chunk = Chunk(
@@ -79,24 +72,24 @@ class AudioProcessor:
                 chunk_index=len(chunks),
                 content=piece,
                 tokens=len(piece.split()),
-                embedding=emb,
+                embedding=embedding,
                 created_at=datetime.utcnow()
             )
             chunks.append(chunk)
 
         if not chunks:
-            text = "No transcript chunks could be generated."
-            emb = EmbeddingService.get_embedding(text)
-
-            chunk = Chunk(
-                document_id=doc.id,
-                chunk_index=0,
-                content=text,
-                tokens=len(text.split()),
-                embedding=emb,
-                created_at=datetime.utcnow()
+            fallback = "No transcript chunks could be generated."
+            embedding = EmbeddingService.get_embedding(fallback)
+            chunks.append(
+                Chunk(
+                    document_id=doc.id,
+                    chunk_index=0,
+                    content=fallback,
+                    tokens=len(fallback.split()),
+                    embedding=embedding,
+                    created_at=datetime.utcnow()
+                )
             )
-            chunks.append(chunk)
 
         db.add_all(chunks)
         db.commit()
