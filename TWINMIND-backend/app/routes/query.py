@@ -29,7 +29,7 @@ faiss_service = FaissService()
 # ---------------------------
 class QueryRequest(BaseModel):
     query: str
-    user_id: str = "default_user"
+    user_id: str = "demo_user"
     top_k: int = 5
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
