@@ -78,31 +78,41 @@ async def keyword_query(request: QueryRequest, db: Session = Depends(get_db)):
 # -----------------------------------------------------
 @router.post("/rag")
 async def rag(req: QueryRequest, db: Session = Depends(get_db)):
+    logger.info(f"[RAG] Query received: {req.query}")
+
     try:
         chunks_q = db.query(Chunk)
 
-        # ❌ REMOVE METADATA FILTER — THIS BROKE EVERYTHING
-        # If needed later we will re-add with regex support
-
-        if req.start_date:
-            chunks_q = chunks_q.filter(Chunk.created_at >= req.start_date)
-        if req.end_date:
-            chunks_q = chunks_q.filter(Chunk.created_at <= req.end_date)
-
         chunks = chunks_q.all()
+        logger.info(f"[RAG] Loaded chunks from DB: {len(chunks)}")
 
         if not chunks:
+            logger.error("[RAG] No chunks found in DB")
             return {"answer": "No relevant data found.", "sources": []}
 
+        # Build index
         faiss_service.build_index(chunks)
 
+        # Generate embedding
         query_emb = EmbeddingService.get_embedding(req.query)
+        logger.info(f"[RAG] Query embedding length: {len(query_emb) if query_emb else 'None'}")
+
+        if not query_emb:
+            logger.error("[RAG] Embedding generation failed")
+            return {"answer": "LLM error: could not embed query", "sources": []}
+
+        # FAISS search
         results = faiss_service.search(query_emb, req.top_k)
+        logger.info(f"[RAG] FAISS returned {len(results)} results")
 
         if not results:
+            logger.warning("[RAG] No semantic matches found")
             return {"answer": "No relevant information found.", "sources": []}
 
+        # Build context for the LLM
         context = "\n\n".join([c.content for c, _ in results])
+        logger.info(f"[RAG] Context length: {len(context)} characters")
+
         answer = GeminiService.answer(req.query, context)
 
         return {
@@ -119,8 +129,9 @@ async def rag(req: QueryRequest, db: Session = Depends(get_db)):
         }
 
     except Exception as e:
-        logger.error("RAG error", exc_info=True)
+        logger.error(f"[RAG] ERROR: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 # -----------------------------------------------------
