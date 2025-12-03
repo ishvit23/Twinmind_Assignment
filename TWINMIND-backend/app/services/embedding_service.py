@@ -1,17 +1,20 @@
+# app/services/embedding_service.py
 import logging
 from sentence_transformers import SentenceTransformer
-from app.config import get_settings
 import numpy as np
+from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
 class EmbeddingService:
-    model = SentenceTransformer(settings.EMBEDDING_MODEL)
+    # Force MiniLM L6-v2 (384 dims)
+    model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+    dim = 384
 
     @staticmethod
     def get_dim():
-        return settings.EMBEDDING_DIMENSION
+        return EmbeddingService.dim
 
     @staticmethod
     def get_embedding(text: str):
