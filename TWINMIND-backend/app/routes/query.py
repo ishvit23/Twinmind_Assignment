@@ -19,34 +19,27 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Query"])
 
-# One FAISS index for the entire process
 faiss_service = FaissService()
 
 
-# ------------------------------------------------------------
-# Request Schema
-# ------------------------------------------------------------
 class QueryRequest(BaseModel):
     query: str
-    user_id: str = "demo_user"   # Default user
+    user_id: str = "demo_user"
     top_k: int = 5
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
 
 
-# ------------------------------------------------------------
-# 🔎 SIMPLE KEYWORD SEARCH
-# ------------------------------------------------------------
+# -----------------------------------------------------
+# 🔍 SIMPLE KEYWORD SEARCH
+# -----------------------------------------------------
 @router.post("/query")
 async def keyword_query(request: QueryRequest, db: Session = Depends(get_db)):
     try:
         q = db.query(Chunk)
 
-        # Fix: use ilike instead of contains
-        if request.user_id:
-            q = q.join(Document).filter(
-                Document.doc_metadata.ilike(f"%uploaded_by:{request.user_id}%")
-            )
+        # ❌ USER FILTER REMOVED (this was blocking all results)
+        # If you need user filtering later, we will add a robust version
 
         chunks = q.all()
 
@@ -80,18 +73,16 @@ async def keyword_query(request: QueryRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ------------------------------------------------------------
+# -----------------------------------------------------
 # 🤖 FULL RAG PIPELINE
-# ------------------------------------------------------------
+# -----------------------------------------------------
 @router.post("/rag")
 async def rag(req: QueryRequest, db: Session = Depends(get_db)):
     try:
-        # Apply user filter correctly
-        chunks_q = (
-            db.query(Chunk)
-            .join(Document)
-            .filter(Document.doc_metadata.ilike(f"%uploaded_by:{req.user_id}%"))
-        )
+        chunks_q = db.query(Chunk)
+
+        # ❌ REMOVE METADATA FILTER — THIS BROKE EVERYTHING
+        # If needed later we will re-add with regex support
 
         if req.start_date:
             chunks_q = chunks_q.filter(Chunk.created_at >= req.start_date)
@@ -103,19 +94,15 @@ async def rag(req: QueryRequest, db: Session = Depends(get_db)):
         if not chunks:
             return {"answer": "No relevant data found.", "sources": []}
 
-        # Build FAISS index
         faiss_service.build_index(chunks)
 
-        # Create query embedding
         query_emb = EmbeddingService.get_embedding(req.query)
         results = faiss_service.search(query_emb, req.top_k)
 
         if not results:
             return {"answer": "No relevant information found.", "sources": []}
 
-        # Create context for LLM
         context = "\n\n".join([c.content for c, _ in results])
-
         answer = GeminiService.answer(req.query, context)
 
         return {
@@ -136,18 +123,15 @@ async def rag(req: QueryRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ------------------------------------------------------------
-# 🧠 SEMANTIC SEARCH ONLY
-# ------------------------------------------------------------
+# -----------------------------------------------------
+# 🧠 SEMANTIC SEARCH
+# -----------------------------------------------------
 @router.post("/semantic-search")
 async def semantic_search_route(request: QueryRequest, db: Session = Depends(get_db)):
     try:
         q = db.query(Chunk)
 
-        if request.user_id:
-            q = q.join(Document).filter(
-                Document.doc_metadata.ilike(f"%uploaded_by:{request.user_id}%")
-            )
+        # ❌ FILTER REMOVED (same issue as RAG)
 
         if request.start_date:
             q = q.filter(Chunk.created_at >= request.start_date)
@@ -160,8 +144,8 @@ async def semantic_search_route(request: QueryRequest, db: Session = Depends(get
             return {"status": "success", "results": []}
 
         faiss_service.build_index(chunks)
-
         query_emb = EmbeddingService.get_embedding(request.query)
+
         if not query_emb:
             return {"status": "success", "results": []}
 
