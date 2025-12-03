@@ -22,7 +22,7 @@ router = APIRouter()
 @router.post("/ingest/upload")
 async def upload_document(
     file: UploadFile = File(...),
-    user_id: str = Query("default_user"),          # ✔ FIXED
+    user_id: str = Query("demo_user"),          # ✔ FIXED
     db: Session = Depends(get_db)
 ):
     try:
@@ -43,7 +43,7 @@ async def upload_document(
 @router.post("/ingest/audio")
 async def upload_audio(
     file: UploadFile = File(...),
-    user_id: str = Query("default_user"),          # ✔ FIXED
+    user_id: str = Query("demo_user"),          # ✔ FIXED
     db: Session = Depends(get_db)
 ):
     try:
@@ -64,7 +64,7 @@ async def upload_audio(
 # -------------------------------------------------------
 class WebIngestRequest(BaseModel):
     url: str
-    user_id: str = "default_user"
+    user_id: str = "demo_user"
 
 @router.post("/ingest/web")
 async def upload_web(req: WebIngestRequest, db: Session = Depends(get_db)):
@@ -87,7 +87,7 @@ async def upload_web(req: WebIngestRequest, db: Session = Depends(get_db)):
 @router.post("/ingest/image")
 async def upload_image(
     file: UploadFile = File(...),
-    user_id: str = Query("default_user"),          # ✔ FIXED
+    user_id: str = Query("demo_user"),          # ✔ FIXED
     db: Session = Depends(get_db)
 ):
     try:
@@ -108,7 +108,7 @@ async def upload_image(
 class TextUpload(BaseModel):
     text: str
     title: str = "Untitled"
-    user_id: str = "default_user"
+    user_id: str = "demo_user"
 
 @router.post("/ingest/text")
 async def upload_text(upload: TextUpload, db: Session = Depends(get_db)):
