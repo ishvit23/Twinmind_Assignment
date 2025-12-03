@@ -17,19 +17,18 @@ from app.services.llm.query_service import GeminiService
 
 logger = logging.getLogger(__name__)
 
-# ❌ REMOVE prefix="/api"
 router = APIRouter(tags=["Query"])
 
-# Global FAISS index
+# One FAISS index for the entire process
 faiss_service = FaissService()
 
 
-# ---------------------------
-# Request Model
-# ---------------------------
+# ------------------------------------------------------------
+# Request Schema
+# ------------------------------------------------------------
 class QueryRequest(BaseModel):
     query: str
-    user_id: str = "demo_user"
+    user_id: str = "demo_user"   # Default user
     top_k: int = 5
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
@@ -43,19 +42,16 @@ async def keyword_query(request: QueryRequest, db: Session = Depends(get_db)):
     try:
         q = db.query(Chunk)
 
+        # Fix: use ilike instead of contains
         if request.user_id:
             q = q.join(Document).filter(
-                Document.doc_metadata.contains(f"uploaded_by:{request.user_id}")
+                Document.doc_metadata.ilike(f"%uploaded_by:{request.user_id}%")
             )
 
         chunks = q.all()
 
         if not chunks:
-            return {
-                "status": "success",
-                "results": [],
-                "message": "No documents found"
-            }
+            return {"status": "success", "results": [], "message": "No documents found"}
 
         query_lower = request.query.lower()
 
@@ -90,10 +86,11 @@ async def keyword_query(request: QueryRequest, db: Session = Depends(get_db)):
 @router.post("/rag")
 async def rag(req: QueryRequest, db: Session = Depends(get_db)):
     try:
+        # Apply user filter correctly
         chunks_q = (
             db.query(Chunk)
             .join(Document)
-            .filter(Document.doc_metadata.contains(f"uploaded_by:{req.user_id}"))
+            .filter(Document.doc_metadata.ilike(f"%uploaded_by:{req.user_id}%"))
         )
 
         if req.start_date:
@@ -106,14 +103,17 @@ async def rag(req: QueryRequest, db: Session = Depends(get_db)):
         if not chunks:
             return {"answer": "No relevant data found.", "sources": []}
 
+        # Build FAISS index
         faiss_service.build_index(chunks)
 
+        # Create query embedding
         query_emb = EmbeddingService.get_embedding(req.query)
         results = faiss_service.search(query_emb, req.top_k)
 
         if not results:
             return {"answer": "No relevant information found.", "sources": []}
 
+        # Create context for LLM
         context = "\n\n".join([c.content for c, _ in results])
 
         answer = GeminiService.answer(req.query, context)
@@ -137,7 +137,7 @@ async def rag(req: QueryRequest, db: Session = Depends(get_db)):
 
 
 # ------------------------------------------------------------
-# 🧠 SEMANTIC SEARCH
+# 🧠 SEMANTIC SEARCH ONLY
 # ------------------------------------------------------------
 @router.post("/semantic-search")
 async def semantic_search_route(request: QueryRequest, db: Session = Depends(get_db)):
@@ -146,7 +146,7 @@ async def semantic_search_route(request: QueryRequest, db: Session = Depends(get
 
         if request.user_id:
             q = q.join(Document).filter(
-                Document.doc_metadata.contains(f"uploaded_by:{request.user_id}")
+                Document.doc_metadata.ilike(f"%uploaded_by:{request.user_id}%")
             )
 
         if request.start_date:
@@ -162,7 +162,6 @@ async def semantic_search_route(request: QueryRequest, db: Session = Depends(get
         faiss_service.build_index(chunks)
 
         query_emb = EmbeddingService.get_embedding(request.query)
-
         if not query_emb:
             return {"status": "success", "results": []}
 
