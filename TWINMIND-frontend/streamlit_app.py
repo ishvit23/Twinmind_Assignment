@@ -10,6 +10,8 @@ st.set_page_config(
 
 BACKEND_URL = os.getenv("BACKEND_URL", "https://twinmind-assignment-4.onrender.com")
 
+MAX_PASSWORD_LEN = 72   # bcrypt limit
+
 
 # ==========================================================
 # SAFE JSON PARSER
@@ -25,20 +27,24 @@ def safe_request(res):
 # AUTH HELPERS
 # ==========================================================
 def login_user(username, password):
+    password = password[:MAX_PASSWORD_LEN]  # truncate
+
     res = requests.post(
         f"{BACKEND_URL}/api/auth/login",
         json={"username": username, "password": password}
     )
-    print("LOGIN RESPONSE:", res.text)      # DEBUG
+    print("LOGIN RESPONSE:", res.text)  # DEBUG
     return safe_request(res)
 
 
 def register_user(username, email, password):
+    password = password[:MAX_PASSWORD_LEN]  # truncate
+
     res = requests.post(
         f"{BACKEND_URL}/api/auth/register",
         json={"username": username, "email": email, "password": password}
     )
-    print("SIGNUP RESPONSE:", res.text)     # DEBUG
+    print("SIGNUP RESPONSE:", res.text)  # DEBUG
     return safe_request(res)
 
 
@@ -65,10 +71,8 @@ def show_login_page():
             st.success("Logged in successfully! 🎉")
             st.rerun()
         else:
-            if data and "detail" in data:
-                st.error(f"❌ Login failed: {data['detail']}")
-            else:
-                st.error(f"❌ Login failed: {err or 'Unknown error'}")
+            detail = data.get("detail") if data else None
+            st.error(f"❌ Login failed: {detail or err or 'Unknown error'}")
 
 
 # ==========================================================
@@ -79,18 +83,19 @@ def show_signup_page():
 
     username = st.text_input("Username (min 3 chars)")
     email = st.text_input("Email")
-    password = st.text_input("Password", type="password")
+    password = st.text_input("Password (max 72 chars)", type="password")
 
     if st.button("Sign Up"):
+        if len(password) > MAX_PASSWORD_LEN:
+            st.warning("Password automatically truncated to 72 characters.")
+
         data, err = register_user(username, email, password)
 
         if data and data.get("status") == "success":
             st.success("🎉 Account created! Please login.")
         else:
-            if data and "detail" in data:
-                st.error(f"❌ Signup failed: {data['detail']}")
-            else:
-                st.error(f"❌ Signup failed: {err or 'Unknown error'}")
+            detail = data.get("detail") if data else None
+            st.error(f"❌ Signup failed: {detail or err or 'Unknown error'}")
 
 
 # ==========================================================
@@ -226,7 +231,7 @@ def show_app():
 
 
 # ==========================================================
-# ROUTING LOGIC
+# NAVIGATION
 # ==========================================================
 page = st.sidebar.selectbox("Navigation", ["Login", "Sign Up", "App"])
 
