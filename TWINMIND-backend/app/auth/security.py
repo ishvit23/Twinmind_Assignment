@@ -4,51 +4,72 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 import os
 
-# Get secret from env
+# ============================================================
+# JWT CONFIG
+# ============================================================
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
-# Bcrypt context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# ============================================================
+# BCRYPT CONFIG
+# ============================================================
+# Use ONLY bcrypt (not py-bcrypt). Passlib’s CryptContext will load correct backend.
+pwd_context = CryptContext(
+    schemes=["bcrypt"],
+    deprecated="auto",
+)
 
-MAX_BCRYPT_LENGTH = 72   # bcrypt will ignore anything after 72 bytes
+# bcrypt ignores everything after 72 bytes → we manually truncate to avoid errors
+MAX_BCRYPT_LENGTH = 72
 
 
+# ============================================================
+# JWT CREATION & VALIDATION
+# ============================================================
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    """Create a JWT access token with expiration."""
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
 
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+    token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return token
 
 
 def verify_token(token: str) -> Optional[dict]:
+    """Decode JWT token and return payload or None if invalid."""
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
         return None
 
 
+# ============================================================
+# PASSWORD HASHING & VERIFYING WITH SAFE TRUNCATION
+# ============================================================
 def hash_password(password: str) -> str:
     """
-    bcrypt only hashes the first 72 bytes.
-    We truncate safely before hashing to avoid backend errors.
+    bcrypt ONLY uses the first 72 bytes.
+    We safely truncate to prevent bcrypt backend errors.
     """
-    if password is None:
+    if not password:
         password = ""
-    password = password[:MAX_BCRYPT_LENGTH]  # 🔥 hard truncate
-    return pwd_context.hash(password)
+
+    # 🔥 hard truncate
+    safe_password = password[:MAX_BCRYPT_LENGTH]
+
+    return pwd_context.hash(safe_password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
-    MUST truncate the password here also, because user's input
-    might exceed 72 characters → bcrypt would ignore rest.
+    Truncate password BEFORE verifying, otherwise bcrypt will mismatch.
     """
-    if plain_password is None:
+    if not plain_password:
         plain_password = ""
-    plain_password = plain_password[:MAX_BCRYPT_LENGTH]  # 🔥 truncate
-    return pwd_context.verify(plain_password, hashed_password)
+
+    # 🔥 same truncate logic
+    safe_password = plain_password[:MAX_BCRYPT_LENGTH]
+
+    return pwd_context.verify(safe_password, hashed_password)
