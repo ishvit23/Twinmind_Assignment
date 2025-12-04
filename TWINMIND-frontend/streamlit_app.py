@@ -10,13 +10,15 @@ st.set_page_config(
 
 BACKEND_URL = os.getenv("BACKEND_URL", "https://twinmind-assignment-4.onrender.com")
 
-MAX_PASSWORD_LEN = 72   # bcrypt limit
+MAX_PASSWORD_LEN = 72   # bcrypt safe limit
 
 
 # ==========================================================
 # SAFE JSON PARSER
 # ==========================================================
 def safe_request(res):
+    if res is None:
+        return None, "No response"
     try:
         return res.json(), None
     except:
@@ -27,13 +29,12 @@ def safe_request(res):
 # AUTH HELPERS
 # ==========================================================
 def login_user(username, password):
-    password = password[:MAX_PASSWORD_LEN]  # truncate
+    password = password[:MAX_PASSWORD_LEN]  # truncate for safety
 
     res = requests.post(
         f"{BACKEND_URL}/api/auth/login",
         json={"username": username, "password": password}
     )
-    print("LOGIN RESPONSE:", res.text)  # DEBUG
     return safe_request(res)
 
 
@@ -44,20 +45,19 @@ def register_user(username, email, password):
         f"{BACKEND_URL}/api/auth/register",
         json={"username": username, "email": email, "password": password}
     )
-    print("SIGNUP RESPONSE:", res.text)  # DEBUG
     return safe_request(res)
 
 
 def logout_user():
-    st.session_state.pop("token", None)
-    st.session_state.pop("username", None)
+    st.session_state.clear()
+    st.rerun()
 
 
 # ==========================================================
 # LOGIN UI
 # ==========================================================
 def show_login_page():
-    st.title("🔐 Login")
+    st.title("🔐 Login to Second Brain")
 
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
@@ -67,12 +67,12 @@ def show_login_page():
 
         if data and "access_token" in data:
             st.session_state["token"] = data["access_token"]
-            st.session_state["username"] = data.get("username", username)
-            st.success("Logged in successfully! 🎉")
+            st.session_state["username"] = data["username"]
+            st.success("🎉 Login successful!")
             st.rerun()
         else:
-            detail = data.get("detail") if data else None
-            st.error(f"❌ Login failed: {detail or err or 'Unknown error'}")
+            detail = (data.get("detail") if data else None) or err or "Unknown error"
+            st.error(f"❌ Login failed: {detail}")
 
 
 # ==========================================================
@@ -87,19 +87,19 @@ def show_signup_page():
 
     if st.button("Sign Up"):
         if len(password) > MAX_PASSWORD_LEN:
-            st.warning("Password automatically truncated to 72 characters.")
+            st.warning("Password truncated to 72 characters for security.")
 
         data, err = register_user(username, email, password)
 
         if data and data.get("status") == "success":
-            st.success("🎉 Account created! Please login.")
+            st.success("🎉 Account created successfully! Please login.")
         else:
-            detail = data.get("detail") if data else None
-            st.error(f"❌ Signup failed: {detail or err or 'Unknown error'}")
+            detail = (data.get("detail") if data else None) or err or "Unknown error"
+            st.error(f"❌ Signup failed: {detail}")
 
 
 # ==========================================================
-# MAIN APPLICATION (PROTECTED)
+# MAIN PROTECTED APP
 # ==========================================================
 def show_app():
     token = st.session_state.get("token")
@@ -108,7 +108,6 @@ def show_app():
     st.sidebar.write(f"👤 Logged in as **{username}**")
     if st.sidebar.button("Logout"):
         logout_user()
-        st.rerun()
 
     st.title("🧠 Second Brain AI Companion")
     st.header("Ingest Data")
@@ -121,65 +120,48 @@ def show_app():
         ["Document", "Audio", "Image", "Web URL", "Plain Text"]
     )
 
-    # =====================================================
-    # DOCUMENT INGESTION
-    # =====================================================
+    # --- Document ---
     if modality == "Document":
-        uploaded_file = st.file_uploader("Upload Document (.pdf, .md, .txt)", type=["pdf", "md", "txt"])
-        if st.button("Ingest Document") and uploaded_file:
+        file = st.file_uploader("Upload Document (.pdf, .md, .txt)", type=["pdf", "md", "txt"])
+        if st.button("Ingest Document") and file:
             res = requests.post(
                 f"{BACKEND_URL}/api/ingest/upload",
-                files={"file": uploaded_file},
+                files={"file": file},
                 params={"user_id": user_id},
                 headers=headers
             )
             data, err = safe_request(res)
-            if data:
-                st.success(f"📄 Document Ingested: {data.get('filename')}")
-            else:
-                st.error(err)
+            st.success(f"📄 Document Ingested: {data.get('filename')}") if data else st.error(err)
 
-    # =====================================================
-    # AUDIO INGESTION
-    # =====================================================
+    # --- Audio ---
     elif modality == "Audio":
-        audio_file = st.file_uploader("Upload Audio (.mp3, .m4a)", type=["mp3", "m4a"])
-        if st.button("Ingest Audio") and audio_file:
+        file = st.file_uploader("Upload Audio (.mp3, .m4a)", type=["mp3", "m4a"])
+        if st.button("Ingest Audio") and file:
             res = requests.post(
                 f"{BACKEND_URL}/api/ingest/audio",
-                files={"file": audio_file},
+                files={"file": file},
                 params={"user_id": user_id},
                 headers=headers
             )
             data, err = safe_request(res)
-            if data:
-                st.success("🎧 Audio processed!")
-            else:
-                st.error(err)
+            st.success("🎧 Audio processed!") if data else st.error(err)
 
-    # =====================================================
-    # IMAGE INGESTION
-    # =====================================================
+    # --- Image ---
     elif modality == "Image":
-        img_file = st.file_uploader("Upload Image", type=["png", "jpg", "jpeg"])
-        if st.button("Ingest Image") and img_file:
+        file = st.file_uploader("Upload Image", type=["png", "jpg", "jpeg"])
+        if st.button("Ingest Image") and file:
             res = requests.post(
                 f"{BACKEND_URL}/api/ingest/image",
-                files={"file": img_file},
+                files={"file": file},
                 params={"user_id": user_id},
                 headers=headers
             )
             data, err = safe_request(res)
-            if data:
-                st.success("🖼️ Image processed!")
-            else:
-                st.error(err)
+            st.success("🖼️ Image processed!") if data else st.error(err)
 
-    # =====================================================
-    # WEB URL INGESTION
-    # =====================================================
+    # --- Web URL ---
     elif modality == "Web URL":
-        url = st.text_input("Enter Web URL")
+        url = st.text_input("Enter a Web URL")
         if st.button("Ingest Web Content") and url:
             res = requests.post(
                 f"{BACKEND_URL}/api/ingest/web",
@@ -187,45 +169,39 @@ def show_app():
                 headers=headers
             )
             data, err = safe_request(res)
-            if data:
-                st.success("🌍 Web content ingested!")
-            else:
-                st.error(err)
+            st.success("🌍 Web content ingested!") if data else st.error(err)
 
-    # =====================================================
-    # TEXT INGESTION
-    # =====================================================
+    # --- Plain Text ---
     elif modality == "Plain Text":
-        txt = st.text_area("Enter Text")
-        if st.button("Ingest Text") and txt:
+        text = st.text_area("Enter Text")
+        if st.button("Ingest Text") and text:
             res = requests.post(
                 f"{BACKEND_URL}/api/ingest/text",
-                json={"text": txt, "title": "Manual Text", "user_id": user_id},
+                json={"text": text, "title": "Manual Text", "user_id": user_id},
                 headers=headers
             )
             data, err = safe_request(res)
-            if data:
-                st.success("📝 Text ingested!")
-            else:
-                st.error(err)
+            st.success("📝 Text ingested!") if data else st.error(err)
 
-    # =====================================================
-    # CHAT WITH RAG
-    # =====================================================
+    # ======================================================
+    # RAG CHAT SECTION
+    # ======================================================
     st.markdown("---")
-    st.header("💬 Chat with RAG")
+    st.header("💬 Chat with your AI")
 
     query = st.text_input("Ask something…")
 
-    if st.button("Send"):
+    if st.button("Send Query"):
         res = requests.post(
             f"{BACKEND_URL}/api/rag",
             json={"query": query, "user_id": user_id, "top_k": 5},
             headers=headers
         )
         data, err = safe_request(res)
+
         if data:
-            st.write("**AI:**", data.get("answer"))
+            st.subheader("🤖 AI Response")
+            st.write(data.get("answer"))
         else:
             st.error(err)
 
@@ -236,10 +212,10 @@ def show_app():
 page = st.sidebar.selectbox("Navigation", ["Login", "Sign Up", "App"])
 
 if page == "Login":
-    if "token" not in st.session_state:
-        show_login_page()
-    else:
+    if "token" in st.session_state:
         show_app()
+    else:
+        show_login_page()
 
 elif page == "Sign Up":
     show_signup_page()
