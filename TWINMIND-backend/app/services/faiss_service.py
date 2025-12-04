@@ -1,10 +1,6 @@
-# app/services/faiss_service.py
 import numpy as np
 import faiss
-import logging
 from app.services.embedding_service import EmbeddingService
-
-logger = logging.getLogger(__name__)
 
 class FaissService:
 
@@ -13,72 +9,73 @@ class FaissService:
         self.index = None
         self.chunks = []
 
-    def build_index(self, all_chunks):
-        logger.info(f"[FAISS] Building index — total chunks received: {len(all_chunks)}")
+    def _to_list(self, emb):
+        """
+        Convert pgvector Vector -> python list
+        """
+        if emb is None:
+            return None
 
+        # pgvector returns something like Vector([....])
+        # convert to Python list
+        try:
+            return list(emb)
+        except Exception:
+            return None
+
+    def build_index(self, all_chunks):
         valid_chunks = []
         valid_vectors = []
 
         for c in all_chunks:
-            emb = c.embedding
-            if emb is None:
-                logger.warning(f"[FAISS] Chunk {c.id} has NO embedding")
-                continue
+            raw_emb = c.embedding
+            emb = self._to_list(raw_emb)
 
-            if not isinstance(emb, list):
-                logger.error(f"[FAISS] Chunk {c.id} embedding is NOT a list")
+            if emb is None:
+                print(f"[FAISS] Chunk {c.id} embedding invalid")
                 continue
 
             if len(emb) != self.dimension:
-                logger.error(
-                    f"[FAISS] Chunk {c.id} embedding wrong size: {len(emb)} != {self.dimension}"
-                )
+                print(f"[FAISS] Chunk {c.id} dim mismatch {len(emb)} != {self.dimension}")
                 continue
 
+            vector = np.array(emb, dtype=np.float32)
             valid_chunks.append(c)
-            valid_vectors.append(np.array(emb, dtype=np.float32))
-
-        logger.info(f"[FAISS] Valid embeddings: {len(valid_vectors)}")
+            valid_vectors.append(vector)
 
         if not valid_vectors:
-            logger.error("[FAISS] No valid embeddings — FAISS index will NOT be created")
+            print("[FAISS] No valid embeddings — FAISS index cleared")
             self.index = None
             self.chunks = []
             return
 
         vectors_np = np.vstack(valid_vectors)
-        logger.info(f"[FAISS] FAISS array shape: {vectors_np.shape}")
+
+        print("[FAISS] Building index with shape:", vectors_np.shape)
 
         self.index = faiss.IndexFlatL2(self.dimension)
         self.index.add(vectors_np)
 
-        logger.info(f"[FAISS] Index built successfully with {len(valid_chunks)} vectors")
-
         self.chunks = valid_chunks
+        print(f"[FAISS] Index built ({len(valid_chunks)} vectors)")
 
     def search(self, query_embedding, top_k=5):
-        logger.info("[FAISS] Starting search")
 
         if self.index is None:
-            logger.error("[FAISS] Search FAILED — index is None")
+            print("[FAISS] Search failed — index is None")
             return []
 
         query_np = np.array(query_embedding, dtype=np.float32).reshape(1, -1)
-        logger.info(f"[FAISS] Query vector shape: {query_np.shape}")
 
         distances, indices = self.index.search(query_np, top_k)
-        logger.info(f"[FAISS] Search results — distances: {distances}, indices: {indices}")
 
         results = []
         for idx, dist in zip(indices[0], distances[0]):
             if idx == -1:
-                logger.warning("[FAISS] Returned index -1 — skipping")
                 continue
             if idx >= len(self.chunks):
-                logger.error(f"[FAISS] Index {idx} out of range")
                 continue
 
             results.append((self.chunks[idx], float(dist)))
 
-        logger.info(f"[FAISS] Final results count: {len(results)}")
         return results
