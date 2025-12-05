@@ -11,11 +11,11 @@ class GeminiAudioTranscriber:
     @staticmethod
     def transcribe(audio_bytes: bytes, filename: str) -> str:
         """
-        Transcribes audio using Gemini 1.5 Flash model.
+        Transcribes audio using Gemini 2.5 pro model.
         Supports mp3 / m4a / wav automatically.
         """
         try:
-            model = genai.GenerativeModel("gemini-1.5-flash")
+            model = genai.GenerativeModel("models/gemini-2.5-pro")
 
             prompt = """
             You are an automatic speech recognition (ASR) system.
