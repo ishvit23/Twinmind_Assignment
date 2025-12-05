@@ -24,7 +24,7 @@ class GeminiVisionOCR:
             with open(image_path, "rb") as f:
                 img_bytes = f.read()
 
-            model = genai.GenerativeModel("gemini-1.5-flash-latest")
+            model = genai.GenerativeModel("models/gemini-2.5-pro")
 
             prompt = "Extract all readable text from this image. Return ONLY the text."
 
