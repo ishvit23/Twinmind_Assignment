@@ -1,163 +1,105 @@
-# 🧠 Second Brain AI Companion
 
-A multi-modal Retrieval-Augmented Generation (RAG) application powered by FastAPI (backend) and Streamlit (frontend).  
-Supports document, audio, image, web, and text ingestion, semantic search, and Gemini-powered answers with user authentication.
+Second Brain AI Companion
 
----
+A fully multi-modal Retrieval-Augmented Generation (RAG) system powered by FastAPI, Streamlit, PostgreSQL + pgvector, FAISS, and Google Gemini AI (Vision + Audio + Text).
 
-## 🚀 Features
+Users can upload documents, images, audio, URLs, or text, and the system automatically extracts text, embeds it, stores it, indexes it, and uses it for semantic search + RAG answering.
 
-- **User Authentication:** Register and login with secure JWT tokens.
-- **Multi-Modal Ingestion:** Upload and process documents (PDF, TXT, MD), audio files (MP3, M4A), images (PNG, JPG, JPEG), web URLs, and plain text.
-- **Semantic Search:** Uses FAISS and embeddings for fast, relevant retrieval.
-- **RAG Chatbot:** Ask questions and get context-aware answers from your personal knowledge base.
-- **Gemini LLM Integration:** Answers are generated using Google Gemini (or your configured LLM).
-- **Clean UI:** Streamlit frontend with a guided flow (login → register → app).
-- **Extensible:** Modular backend for easy addition of new modalities or models.
+------------------------------------------------------------
 
----
+FEATURES
 
-## 🗂️ Project Structure
+• User Authentication (JWT)  
+• Multi-Modal Ingestion  
+• Image OCR via Gemini Vision  
+• Audio Transcription via Gemini  
+• Semantic Search with FAISS  
+• RAG Chatbot using Gemini  
+• Streamlit Frontend  
+• Modular Backend Architecture  
 
-```
+------------------------------------------------------------
+
+PROJECT STRUCTURE
+
 ASSIGNMENT_TWINMIND/
 │
 ├── TWINMIND-backend/
 │   ├── app/
-│   │   ├── auth/              # Authentication logic
-│   │   ├── database/          # DB connection
-│   │   ├── models/            # SQLAlchemy models
-│   │   ├── routes/            # FastAPI routes
-│   │   ├── services/          # Embedding, FAISS, ingestion, LLM
-│   │   ├── utils/             # Chunking and helpers
-│   │   └── main.py            # FastAPI entrypoint
-│   ├── migrations/            # Alembic migrations
+│   │   ├── auth/
+│   │   ├── database/
+│   │   ├── models/
+│   │   ├── routes/
+│   │   ├── services/
+│   │   │   ├── ingestion/
+│   │   │   ├── llm/
+│   │   │   ├── embedding/
+│   │   │   └── faiss/
+│   │   └── main.py
+│   ├── uploads/
 │   ├── requirements.txt
-│   └── .env                   # Environment variables (not committed)
+│   └── .env
 │
 ├── TWINMIND-frontend/
-│   └── streamlit_app.py       # Streamlit UI
+│   └── streamlit_app.py
 │
-├── .gitignore
 └── README.md
-```
 
----
+------------------------------------------------------------
 
-## ⚡ Quickstart
+BACKEND SETUP
 
-### 1. Clone the Repository
-
-```sh
-git clone https://github.com/<your-username>/<your-repo-name>.git
-cd ASSIGNMENT_TWINMIND
-```
-
-### 2. Backend Setup
-
-```sh
 cd TWINMIND-backend
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+source .venv/bin/activate
 pip install -r requirements.txt
-# Set up your .env file (see below)
 uvicorn app.main:app --reload
-```
 
-### 3. Frontend Setup
+------------------------------------------------------------
 
-```sh
-cd ../TWINMIND-frontend
+FRONTEND SETUP
+
+cd TWINMIND-frontend
 pip install streamlit requests
 streamlit run streamlit_app.py
-```
 
----
+------------------------------------------------------------
 
-## 🔑 Environment Variables (`.env` Example)
+ENVIRONMENT VARIABLES
 
-```
-DATABASE_URL=postgresql+psycopg2://user:password@localhost:5432/twinmind_db
-SECRET_KEY=your_secret_key
-GEMINI_API_KEY=your_gemini_api_key
-```
+DATABASE_URL=
+SECRET_KEY=
+GEMINI_API_KEY=
 
----
+------------------------------------------------------------
 
-## 📝 Usage Flow
+WORKFLOW
 
-1. **Login:** Start at the login page.
-2. **Register:** If login fails, register a new account.
-3. **App:** After login, access ingestion and chat features.
-4. **Ingest Data:** Upload documents, audio, images, web URLs, or text.
-5. **Chat:** Ask questions and get answers based on your ingested data.
+1. Login / Signup  
+2. Ingest Data  
+3. Chunk + Embed  
+4. FAISS Index  
+5. RAG Chat with Sources  
 
----
+------------------------------------------------------------
 
-## 🛠️ Tech Stack
+TECH STACK
 
-- **Backend:** FastAPI, SQLAlchemy, Alembic, FAISS, Google Gemini API
-- **Frontend:** Streamlit
-- **Database:** PostgreSQL (with pgvector for embeddings)
-- **Audio:** OpenAI Whisper for transcription
-- **Image:** Tesseract OCR for text extraction
+• FastAPI  
+• Streamlit  
+• PostgreSQL + pgvector  
+• FAISS  
+• SentenceTransformers  
+• Gemini LLM + Vision + Audio  
 
----
+------------------------------------------------------------
 
-## 📦 Extending the App
+FAQ
 
-- Add new ingestion processors in `app/services/ingestion/`.
-- Swap LLMs in `app/services/llm/`.
-- Add new routes in `app/routes/`.
+Q: Can I use GPT-4 instead of Gemini?  
+A: Yes — replace the LLM service.
 
----
+Q: How to add new modal?  
+A: Create a processor in app/services/ingestion.
 
-## 🧪 Testing
-
-- Backend: Use pytest for unit/integration tests.
-- Frontend: Manual testing via Streamlit UI.
-
----
-
-## 🗄️ Data Privacy
-
-- Uploaded files are stored locally in `uploads/` and `temp_audio/` (excluded from git).
-- User authentication uses JWT tokens.
-
----
-
-## 🤝 Contributing
-
-1. Fork the repo
-2. Create a feature branch
-3. Commit your changes
-4. Open a pull request
-
----
-
-## 📚 License
-
-MIT License
-
----
-
-## 💡 Credits
-
-Developed for the TwinMind Assignment by Ishvit Khajuria and contributors.
-
----
-
-## ❓ FAQ
-
-**Q: How do I reset my password?**  
-A: Currently, password reset is not implemented.
-
-**Q: Can I use another LLM?**  
-A: Yes! Swap out Gemini for any LLM in `app/services/llm/`.
-
-**Q: How do I add a new data modality?**  
-A: Add a new processor in `app/services/ingestion/` and update the frontend.
-
----
-
-## 🏁 Ready to build your Second Brain!
+------------------------------------------------------------
