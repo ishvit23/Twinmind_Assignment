@@ -1,44 +1,47 @@
 import google.generativeai as genai
+import logging
+import mimetypes
 from app.config import get_settings
-import base64
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
-# Configure API
-genai.configure(api_key=settings.GOOGLE_API_KEY)
+# Configure Gemini using the correct env variable
+genai.configure(api_key=settings.GEMINI_API_KEY)
 
 class GeminiVisionOCR:
     @staticmethod
     def extract_text(image_path: str) -> str:
         """
-        Sends an image to Gemini 1.5 Flash (Vision)
-        and extracts the text using OCR-like prompting.
+        Extract readable text from an image using Gemini Vision OCR.
+        Supports PNG, JPG, JPEG.
         """
         try:
+            # Detect correct MIME type
+            mime_type, _ = mimetypes.guess_type(image_path)
+            mime_type = mime_type or "image/jpeg"
+
             with open(image_path, "rb") as f:
                 img_bytes = f.read()
 
-            img_base64 = base64.b64encode(img_bytes).decode()
+            model = genai.GenerativeModel("gemini-1.5-flash-latest")
 
-            model = genai.GenerativeModel("gemini-1.5-flash")
-
-            prompt = """
-            Extract all readable text from this image.
-            Return ONLY the extracted text, no explanation.
-            """
+            prompt = "Extract all readable text from this image. Return ONLY the text."
 
             result = model.generate_content(
                 [
                     prompt,
                     {
-                        "mime_type": "image/png",
-                        "data": img_base64
+                        "mime_type": mime_type,
+                        "data": img_bytes
                     }
                 ]
             )
 
-            return result.text or ""
-        
+            text = result.text or ""
+            logger.info(f"[Gemini OCR] Extracted {len(text)} chars")
+            return text
+
         except Exception as e:
-            print("[Gemini OCR ERROR]:", e)
+            logger.error(f"[Gemini OCR ERROR]: {e}")
             return ""
