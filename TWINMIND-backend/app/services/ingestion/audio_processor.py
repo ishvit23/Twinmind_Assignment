@@ -1,5 +1,3 @@
-# app/services/ingestion/audio_processor.py
-
 import uuid
 from datetime import datetime
 from sqlalchemy.orm import Session
@@ -7,24 +5,40 @@ from sqlalchemy.orm import Session
 from app.models.document import Document, ModalityType
 from app.models.chunk import Chunk
 from app.services.embedding_service import EmbeddingService
+from app.services.llm.gemini_audio import GeminiAudioTranscriber
 
 
 class AudioProcessor:
 
     async def process(self, file, user_id: str, db: Session):
         """
-        Whisper disabled to avoid OOM. We store a fallback transcript instead.
+        Audio ingestion using Gemini Flash transcription.
         """
 
-        # Save file (optional—you can disable saving too)
+        # ----------------------
+        # 1️⃣ Read file bytes
+        # ----------------------
+        audio_bytes = await file.read()
         audio_path = f"uploads/{uuid.uuid4()}_{file.filename}"
+
+        # Save raw file
         with open(audio_path, "wb") as f:
-            f.write(await file.read())
+            f.write(audio_bytes)
 
-        # Fallback transcript
-        transcript = "Audio transcription temporarily disabled due to memory limits."
+        # ----------------------
+        # 2️⃣ Transcribe audio
+        # ----------------------
+        transcript = GeminiAudioTranscriber.transcribe(
+            audio_bytes=audio_bytes, 
+            filename=file.filename
+        )
 
-        # Create Document record
+        if not transcript.strip():
+            transcript = "No speech detected or transcription failed."
+
+        # ----------------------
+        # 3️⃣ Create Document entry
+        # ----------------------
         doc = Document(
             title=file.filename,
             modality=ModalityType.AUDIO,
@@ -32,11 +46,12 @@ class AudioProcessor:
             doc_metadata=f"uploaded_by:{user_id}",
             created_at=datetime.utcnow()
         )
-
         db.add(doc)
         db.flush()
 
-        # Create one fallback chunk
+        # ----------------------
+        # 4️⃣ Create Chunk with embedding
+        # ----------------------
         embedding = EmbeddingService.get_embedding(transcript)
 
         chunk = Chunk(
