@@ -42,20 +42,22 @@ async def upload_document(
 async def upload_audio(
     file: UploadFile = File(...),
     user_id: str = Query("demo_user"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db)
 ):
     try:
         doc, chunks = await AudioProcessor().process(file, user_id, db)
-        preview = chunks[0].content[:200] if chunks else ""
+
         return {
             "status": "success",
-            "document_id": str(doc.id),
+            "document_id": doc.id,
             "filename": file.filename,
-            "transcript_sample": preview,
+            "transcript_sample": chunks[0].content[:200] if chunks else ""
         }
+
     except Exception as e:
         logger.error("Audio upload failed", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 # -------------------------------------------------------
